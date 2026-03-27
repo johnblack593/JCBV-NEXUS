@@ -279,7 +279,6 @@ class NexusSpotStrategy(bt.Strategy):
         if confidence < self.p.min_confidence:
             return
 
-        n_open = len([o for o in self.broker.getorders() if o.alive()])
         open_positions = len([p for p in self.broker.positions.values() if p.size != 0])
 
         if action == "BUY" and open_positions < self.p.max_positions:

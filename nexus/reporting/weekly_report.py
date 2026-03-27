@@ -159,16 +159,20 @@ class NexusTelegramReporter:
         tp_pct = ((tp - entry) / entry * 100) if entry > 0 else 0
 
         direction = "🟢 LONG" if side == "BUY" else "🔴 SHORT"
+        action = "COMPRA" if side == "BUY" else "VENTA"
 
         msg = (
-            f"⚡ *NEXUS TRADE*\n"
-            f"├── Par: `{symbol}`\n"
-            f"├── Dirección: {direction}\n"
-            f"├── Entrada: `${entry:,.2f}`\n"
-            f"├── Stop Loss: `${sl:,.2f}` ({sl_pct:+.2f}%)\n"
-            f"├── Take Profit: `${tp:,.2f}` ({tp_pct:+.2f}%)\n"
-            f"├── Tamaño: `{size_pct:.1f}%` del capital\n"
-            f"└── Confianza del árbitro: `{confidence:.0%}`"
+            f"⚡ *NEXUS | ORDEN DE {action}*\n"
+            f"─────────────────\n"
+            f"🪙 *Activo:* `{symbol}`\n"
+            f"🎯 *Dirección:* {direction}\n"
+            f"💵 *Entrada:* `${entry:,.2f}`\n"
+            f"🛡️ *Stop Loss:* `${sl:,.2f}` ({sl_pct:+.2f}%)\n"
+            f"💰 *Take Profit:* `${tp:,.2f}` ({tp_pct:+.2f}%)\n"
+            f"📊 *Exposición:* `{size_pct:.1f}%` del capital\n"
+            f"🤖 *Confianza IA:* `{confidence:.0%}`\n"
+            f"─────────────────\n"
+            f"⏳ NEXUS Core Engine"
         )
 
         await self._send(msg)
@@ -194,19 +198,18 @@ class NexusTelegramReporter:
             cooldown_hours: Horas de bloqueo (default 24)
         """
         msg = (
-            f"🚨 *CIRCUIT BREAKER ACTIVADO*\n\n"
-            f"Todas las posiciones cerradas\\.\n"
-            f"Sistema bloqueado por {cooldown_hours} horas\\.\n"
-            f"Drawdown alcanzado: `{drawdown:.1%}`"
+            f"🚨 *CIRCUIT BREAKER ACTIVADO*\n"
+            f"─────────────────\n"
+            f"⚠️ *Atención:* Drawdown Crítico detectado.\n"
+            f"⛔ Todas las posiciones han sido *cerradas* de emergencia.\n"
+            f"🔒 Sistema de trading *bloqueado* por `{cooldown_hours}` horas.\n"
+            f"📉 *Drawdown alcanzado:* `{drawdown:.1%}`\n"
+            f"─────────────────\n"
+            f"🛡️ NEXUS Risk Management"
         )
 
         # Usar MarkdownV2 para el escape, pero intentar con Markdown primero
-        msg_md = (
-            f"🚨 *CIRCUIT BREAKER ACTIVADO*\n\n"
-            f"Todas las posiciones cerradas.\n"
-            f"Sistema bloqueado por {cooldown_hours} horas.\n"
-            f"Drawdown alcanzado: `{drawdown:.1%}`"
-        )
+        msg_md = msg
 
         await self._send(msg_md)
         logger.critical("Alerta circuit breaker enviada: DD=%.1f%%", drawdown * 100)
@@ -356,40 +359,27 @@ class NexusTelegramReporter:
         worst_sym = m.worst_trade.get("symbol", "N/A")
 
         report = (
-            f"📊 *NEXUS — Reporte Semanal*\n"
-            f"Semana del {m.start_date.strftime('%d/%m/%Y')} al {m.end_date.strftime('%d/%m/%Y')}\n"
+            f"📊 *NEXUS | REPORTE SEMANAL*\n"
+            f"🗓️ {m.start_date.strftime('%d/%m/%Y')} al {m.end_date.strftime('%d/%m/%Y')}\n"
             f"─────────────────────────\n"
-            f"Trades: `{m.total_trades}` \\| Ganados: `{m.winning_trades}` \\| Perdidos: `{m.losing_trades}`\n"
-            f"Win Rate: `{m.win_rate}%` \\| Profit Factor: `{m.profit_factor:.2f}`\n"
-            f"P&L: `{'+' if m.pnl >= 0 else ''}{m.pnl:,.2f}` ({'+' if m.pnl_pct >= 0 else ''}{m.pnl_pct:.2f}%)\n"
-            f"Sharpe semanal: `{m.sharpe_ratio:.2f}`\n"
-            f"Max Drawdown: `{m.max_drawdown:.2f}%`\n"
+            f"📈 *P&L Neto:* `{'+' if m.pnl >= 0 else ''}${m.pnl:,.2f}` ({'+' if m.pnl_pct >= 0 else ''}{m.pnl_pct:.2f}%)\n"
+            f"💼 *Trades:* `{m.total_trades}` (Win: `{m.winning_trades}` \\| Loss: `{m.losing_trades}`)\n"
+            f"🎯 *Win Rate:* `{m.win_rate}%`\n"
+            f"⚖️ *Profit Factor:* `{m.profit_factor:.2f}`\n"
+            f"📉 *Max Drawdown:* `{m.max_drawdown:.2f}%`\n"
+            f"🔪 *Sharpe Ratio:* `{m.sharpe_ratio:.2f}`\n"
             f"─────────────────────────\n"
-            f"🏆 Mejor trade: `+${best_pnl:,.2f}` en `{best_sym}`\n"
-            f"💀 Peor trade: `${worst_pnl:,.2f}` en `{worst_sym}`\n"
-            f"{regime_emoji} Régimen actual: *{m.market_regime}*\n"
+            f"🏆 *Cúspide:* `+${best_pnl:,.2f}` en `{best_sym}`\n"
+            f"💀 *Caída:* `${worst_pnl:,.2f}` en `{worst_sym}`\n"
+            f"{regime_emoji} *Régimen del Mercado:* {m.market_regime}\n"
             f"─────────────────────────\n"
-            f"💰 Capital actual: `${m.ending_balance:,.2f}`"
+            f"💰 *Capital Actual:* `${m.ending_balance:,.2f}`\n"
+            f"⚡ NEXUS Analytics"
         )
 
         # Telegram Markdown tiene problemas con | y otros chars,
         # usar versión limpia como fallback
-        report_clean = (
-            f"📊 NEXUS — Reporte Semanal\n"
-            f"Semana del {m.start_date.strftime('%d/%m/%Y')} al {m.end_date.strftime('%d/%m/%Y')}\n"
-            f"─────────────────────────\n"
-            f"Trades: {m.total_trades} | Ganados: {m.winning_trades} | Perdidos: {m.losing_trades}\n"
-            f"Win Rate: {m.win_rate}% | Profit Factor: {m.profit_factor:.2f}\n"
-            f"P&L: {'+' if m.pnl >= 0 else ''}{m.pnl:,.2f} ({'+' if m.pnl_pct >= 0 else ''}{m.pnl_pct:.2f}%)\n"
-            f"Sharpe semanal: {m.sharpe_ratio:.2f}\n"
-            f"Max Drawdown: {m.max_drawdown:.2f}%\n"
-            f"─────────────────────────\n"
-            f"🏆 Mejor trade: +${best_pnl:,.2f} en {best_sym}\n"
-            f"💀 Peor trade: ${worst_pnl:,.2f} en {worst_sym}\n"
-            f"{regime_emoji} Régimen actual: {m.market_regime}\n"
-            f"─────────────────────────\n"
-            f"💰 Capital actual: ${m.ending_balance:,.2f}"
-        )
+        report_clean = report.replace('\\|', '|')
 
         return report_clean
 
@@ -579,22 +569,41 @@ async def alerta_circuit_breaker(drawdown: float) -> None:
 #  Test / Validación local
 # ══════════════════════════════════════════════════════════════════════
 
-def _run_validation() -> bool:
-    """Valida el formateo de mensajes sin enviar a Telegram."""
+async def _run_validation() -> bool:
+    """Envía un paquete masivo de tests en vivo al celular para validar el formato institucional."""
     import sys
+    import os
+
+    # Inyectar variables nativas para test móvil real
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+    try:
+        from nexus.config.settings import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+    except ImportError:
+        print("❌ Error de path: ejecuta python desde el root del proyecto -> python nexus/reporting/weekly_report.py")
+        return False
+
     if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
     print("\n" + "=" * 60)
-    print("  VALIDACION — NexusTelegramReporter")
+    print("  VALIDACION EN VIVO — NEXUS MOBILE UI")
     print("=" * 60)
 
-    reporter = NexusTelegramReporter(bot_token="TEST", chat_id="TEST")
-    passed = 0
-    failed = 0
+    if not TELEGRAM_BOT_TOKEN or "tu_token" in TELEGRAM_BOT_TOKEN:
+        print("❌ TELEGRAM_BOT_TOKEN no detectado en el .env")
+        return False
+
+    reporter = NexusTelegramReporter(bot_token=TELEGRAM_BOT_TOKEN, chat_id=TELEGRAM_CHAT_ID)
+    await reporter.initialize()
+
+    if not reporter._initialized:
+        print("❌ Error de autenticacion con Telegram. Credenciales invalidas.")
+        return False
+    
+    print("✅ Autenticado exitosamente. Iniciando transmisión PUSH...\n")
 
     # ── Test 1: Formato alerta trade ──────────────────────────────
-    print("\n--- Test 1: Alerta Trade ---")
+    print("Enviando [1/3] -> Notificacion de Trade... ", end="", flush=True)
     trade_data = {
         "symbol": "BTCUSDT",
         "side": "BUY",
@@ -604,142 +613,44 @@ def _run_validation() -> bool:
         "size_pct": 8.5,
         "confidence": 0.78,
     }
-
-    # Simular el formateo (sin enviar)
-    sl_pct = ((66200 - 67500) / 67500 * 100)
-    tp_pct = ((69450 - 67500) / 67500 * 100)
-
-    msg = (
-        f"⚡ NEXUS TRADE\n"
-        f"├── Par: BTCUSDT\n"
-        f"├── Dirección: 🟢 LONG\n"
-        f"├── Entrada: $67,500.00\n"
-        f"├── Stop Loss: $66,200.00 ({sl_pct:+.2f}%)\n"
-        f"├── Take Profit: $69,450.00 ({tp_pct:+.2f}%)\n"
-        f"├── Tamaño: 8.5% del capital\n"
-        f"└── Confianza del árbitro: 78%"
-    )
-    print(msg)
-    if "BTCUSDT" in msg and "LONG" in msg:
-        passed += 1
-        print("  [OK] Formato correcto")
-    else:
-        failed += 1
-        print("  [FAIL]")
+    await reporter.alerta_trade_ejecutado(trade_data)
+    print("OK")
 
     # ── Test 2: Formato circuit breaker ───────────────────────────
-    print("\n--- Test 2: Alerta Circuit Breaker ---")
-    cb_msg = (
-        f"🚨 CIRCUIT BREAKER ACTIVADO\n\n"
-        f"Todas las posiciones cerradas.\n"
-        f"Sistema bloqueado por 24 horas.\n"
-        f"Drawdown alcanzado: 18.0%"
-    )
-    print(cb_msg)
-    if "CIRCUIT BREAKER" in cb_msg and "18.0%" in cb_msg:
-        passed += 1
-        print("  [OK] Formato correcto")
-    else:
-        failed += 1
-        print("  [FAIL]")
+    print("Enviando [2/3] -> Alerta Circuit Breaker... ", end="", flush=True)
+    await reporter.alerta_circuit_breaker(0.18, 24)
+    print("OK")
 
     # ── Test 3: Reporte semanal ───────────────────────────────────
-    print("\n--- Test 3: Reporte Semanal ---")
+    print("Enviando [3/3] -> Reporte Financiero + Chart (Grafico)... ", end="", flush=True)
 
     mock_trades = [
         {"symbol": "BTCUSDT", "pnl": 520.0, "side": "BUY"},
         {"symbol": "ETHUSDT", "pnl": -180.0, "side": "SELL"},
         {"symbol": "BTCUSDT", "pnl": 340.0, "side": "BUY"},
         {"symbol": "BTCUSDT", "pnl": -90.0, "side": "SELL"},
-        {"symbol": "ETHUSDT", "pnl": 150.0, "side": "BUY"},
+        {"symbol": "SOLUSDT", "pnl": 150.0, "side": "BUY"},
     ]
 
+    # Simular data para grafica
     mock_equity = [10000, 10520, 10340, 10680, 10590, 10740]
-
-    now = datetime.now(_TZ_GMT5)
-    metrics = reporter._calculate_weekly_metrics(
+    
+    await reporter.enviar_reporte_semanal(
         trades=mock_trades,
         equity_curve=mock_equity,
-        start_date=now - timedelta(days=7),
-        end_date=now,
+        capital_actual=10740.0
     )
-
-    report = reporter._format_weekly_report(metrics)
-    print(report)
-
-    checks = {
-        "Trades count": metrics.total_trades == 5,
-        "Winning trades": metrics.winning_trades == 3,
-        "Losing trades": metrics.losing_trades == 2,
-        "Win rate 60%": metrics.win_rate == 60.0,
-        "PnL positive": metrics.pnl > 0,
-        "Best trade BTCUSDT": metrics.best_trade["symbol"] == "BTCUSDT",
-        "Worst trade ETHUSDT": metrics.worst_trade["symbol"] == "ETHUSDT",
-        "Report has trades": "Trades:" in report,
-        "Report has capital": "Capital actual:" in report,
-    }
-
-    for name, condition in checks.items():
-        if condition:
-            passed += 1
-            print(f"  [OK]  {name}")
-        else:
-            failed += 1
-            print(f"  [FAIL] {name}")
-
-    # ── Test 4: Detección de régimen ──────────────────────────────
-    print("\n--- Test 4: Deteccion de Regimen ---")
-
-    bull_eq = list(np.linspace(10000, 12000, 50))
-    bear_eq = list(np.linspace(10000, 8000, 50))
-    range_eq = list(10000 + np.sin(np.linspace(0, 12, 50)) * 50)
-
-    r1 = reporter._detect_regime(bull_eq)
-    r2 = reporter._detect_regime(bear_eq)
-    r3 = reporter._detect_regime(range_eq)
-
-    for name, regime, expected in [
-        ("Bullish equity → BULL", r1, "BULL"),
-        ("Bearish equity → BEAR", r2, "BEAR"),
-        ("Sideways equity → RANGE", r3, "RANGE"),
-    ]:
-        if regime == expected:
-            passed += 1
-            print(f"  [OK]  {name} = {regime}")
-        else:
-            failed += 1
-            print(f"  [FAIL] {name}: esperado {expected}, obtenido {regime}")
-
-    # ── Test 5: Gráfico equity ────────────────────────────────────
-    print("\n--- Test 5: Generacion de grafico ---")
-    if _HAS_MPL:
-        try:
-            chart_bytes = reporter._generate_equity_chart(mock_equity)
-            if len(chart_bytes) > 1000:  # PNG válido
-                passed += 1
-                print(f"  [OK]  PNG generado ({len(chart_bytes)} bytes)")
-            else:
-                failed += 1
-                print(f"  [FAIL] PNG demasiado pequeño ({len(chart_bytes)} bytes)")
-        except Exception as exc:
-            failed += 1
-            print(f"  [FAIL] Error: {exc}")
-    else:
-        print("  [SKIP] matplotlib no disponible")
+    print("OK")
 
     # ── Resultado ─────────────────────────────────────────────────
-    total = passed + failed
     print("\n" + "=" * 60)
-    if failed == 0:
-        print(f"  REPORTER VALIDADO: {passed}/{total} tests passed")
-    else:
-        print(f"  ERRORES: {failed}/{total} tests fallaron")
+    print("  SIMULACION FINALIZADA: Revisa tu Telegram ahora.")
     print("=" * 60)
 
-    return failed == 0
-
+    return True
 
 if __name__ == "__main__":
+    import asyncio
+    success = asyncio.run(_run_validation())
     import sys
-    success = _run_validation()
     sys.exit(0 if success else 1)

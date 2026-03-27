@@ -230,6 +230,13 @@ class AgentArbitro:
         self._global_wfo_cache: Dict[str, Any] = {}
         self._load_global_cache()
 
+        # ── Multi-Key Accounts ──────────────────────────────────────────
+        from config.settings import GROQ_API_KEYS, GOOGLE_API_KEYS
+        self._groq_keys = GROQ_API_KEYS
+        self._gemini_keys = GOOGLE_API_KEYS
+        self._groq_idx = 0
+        self._gemini_idx = 0
+
     def _load_global_cache(self) -> None:
         """Carga la caché global de Backtesting desde el disco para evitar re-inferencias WFO."""
         if os.path.exists(self._global_wfo_cache_path):
@@ -339,9 +346,9 @@ class AgentArbitro:
                 logger.warning("langchain-groq no instalado.")
                 return None
 
-            api_key = os.getenv("GROQ_API_KEY", "")
+            api_key = self._groq_keys[self._groq_idx] if self._groq_keys else ""
             if not api_key:
-                logger.warning("GROQ_API_KEY no configurada.")
+                logger.warning("GROQ_API_KEYS no configurada.")
                 return None
 
             return ChatGroq(  # type: ignore
@@ -349,6 +356,7 @@ class AgentArbitro:
                 api_key=api_key,
                 temperature=self.temperature,
                 max_tokens=512,
+                max_retries=0,
             )
 
         # ── GEMINI (2.5 Flash) ──────────────────────────────────
@@ -357,9 +365,9 @@ class AgentArbitro:
                 logger.warning("langchain-google-genai no instalado.")
                 return None
 
-            api_key = os.getenv("GOOGLE_API_KEY", "")
+            api_key = self._gemini_keys[self._gemini_idx] if self._gemini_keys else ""
             if not api_key:
-                logger.warning("GOOGLE_API_KEY no configurada.")
+                logger.warning("GOOGLE_API_KEYS no configurada.")
                 return None
 
             return ChatGoogleGenerativeAI(  # type: ignore
@@ -367,6 +375,7 @@ class AgentArbitro:
                 google_api_key=api_key,
                 temperature=self.temperature,
                 max_output_tokens=512,
+                max_retries=0,
             )
 
         # ── OLLAMA (deshabilitado) ──────────────────────────────
@@ -581,8 +590,25 @@ class AgentArbitro:
         return result
 
     # ══════════════════════════════════════════════════════════════════
-    #  Deliberacion con LLM
+    #  Rotacion de Cuentas y Deliberacion con LLM
     # ══════════════════════════════════════════════════════════════════
+
+    def _rotate_api_key(self, provider: LLMProvider) -> bool:
+        """Rota la API Key y reconstruye la cadena LLM activa si existen multiples tokens."""
+        if provider == LLMProvider.GROQ and len(self._groq_keys) > 1:
+            self._groq_idx = (self._groq_idx + 1) % len(self._groq_keys)
+            key_preview = f"...{self._groq_keys[self._groq_idx][-4:]}" if self._groq_keys[self._groq_idx] else "???"
+            logger.info("🔑 Rotando cuenta GROQ a slot %d (Token: %s)", self._groq_idx, key_preview)
+        elif provider == LLMProvider.GEMINI and len(self._gemini_keys) > 1:
+            self._gemini_idx = (self._gemini_idx + 1) % len(self._gemini_keys)
+            key_preview = f"...{self._gemini_keys[self._gemini_idx][-4:]}" if self._gemini_keys[self._gemini_idx] else "???"
+            logger.info("🔑 Rotando cuenta GEMINI a slot %d (Token: %s)", self._gemini_idx, key_preview)
+        else:
+            logger.warning("No hay cuentas alternativas para %s en el .env. Esperando enfriamiento forzoso (5s)...", provider.value)
+            time.sleep(5)
+            return True
+            
+        return self._init_provider(provider)
 
     def _deliberate_with_llm(
         self,
@@ -593,16 +619,20 @@ class AgentArbitro:
         risk: Dict[str, Any],
         context_str: str,
     ) -> Dict[str, Any]:
-        """Invoca al LLM primario iterativamente para generar la decision y asegurar JSON valido."""
+        """Invoca al LLM primario iterativamente para generar la decision y asegurar JSON valido.
+           Implementa Failover dinamico de Cuentas (Rotacion de Token).
+        """
         risk_summary = self._format_risk_summary(risk)
         last_error = ""
 
-        for attempt in range(2):
+        max_attempts = max(3, len(self._groq_keys) if self._active_provider == LLMProvider.GROQ else len(self._gemini_keys))
+
+        for attempt in range(max_attempts):
             try:
-                # Modificar el prompt en tiempo de ejecucion si hay error
+                # Modificar el prompt en tiempo de ejecucion si hay error de formato
                 human_prompt = _USER_PROMPT_TEMPLATE
-                if last_error:
-                    human_prompt += f"\n\n[SISTEMA]: TU RESPUESTA ANTERIOR GENERO ESTE ERROR: {last_error}. POR FAVOR CORRIGE TU FORMATO A JSON EXCLUSIVAMENTE VALIDO O PERDEREMOS DINERO."
+                if last_error and "rate" not in last_error.lower() and "429" not in last_error:
+                    human_prompt += f"\n\n[SISTEMA]: TU RESPUESTA ANTERIOR GENERO ESTE ERROR: {last_error}. CORRIGE TU FORMATO A JSON EXCLUSIVAMENTE VALIDO O PERDEREMOS DINERO."
 
                 chain = (
                     ChatPromptTemplate.from_messages([
@@ -623,11 +653,19 @@ class AgentArbitro:
                 })
 
                 return self._parse_llm_response(raw_response, raise_error=True)
+
             except Exception as exc:
                 last_error = str(exc)
-                logger.warning("Reintentando LLM (intento %d/2) tras error de parseo: %s", attempt + 1, exc)
+                logger.warning("Error LLM (intento %d/%d): %s", attempt + 1, max_attempts, exc)
+                
+                # Check for rate limiting to trigger rotation
+                if "429" in last_error or "rate limit" in last_error.lower() or "quota" in last_error.lower():
+                    logger.warning("⚠️ Límite de tokens detectado. Activando Rotador de Cuentas...")
+                    provider_to_rotate = self._active_provider
+                    if provider_to_rotate is not None:
+                        self._rotate_api_key(provider_to_rotate)
 
-        return self._hold_decision(f"Error parseo JSON tras reintentos: {last_error}")
+        return self._hold_decision(f"Error parseo JSON y cuotas tras {max_attempts} reintentos y rotaciones: {last_error}")
 
     def _try_failover(
         self,

@@ -1,7 +1,7 @@
 {
     "version": "1.0.0",
-    "last_calibrated": "2026-03-26T18:05:38.695554-05:00",
-    "calibration_source": "wfo_auto_calibrator",
+    "last_calibrated": "2026-03-26T23:35:00-05:00",
+    "calibration_source": "manual_bypass_wfo",
     "spot": {
         "sl_atr_mult": 2.0,
         "tp_atr_mult": 3.0,
@@ -12,7 +12,7 @@
         "expiry_bars": 3,
         "payout_pct": 0.85,
         "stake_pct": 1.0,
-        "min_confidence": 0.7,
+        "min_confidence": 0.70,
         "max_positions": 3
     },
     "risk": {

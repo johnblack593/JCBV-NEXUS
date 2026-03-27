@@ -15,18 +15,37 @@ from typing import List
 
 
 # ──────────────────────────────────────────────
-#  API Keys (cargar desde variables de entorno)
+#  API Keys (Carga dinámica Multi-Cuenta Fallback)
 # ──────────────────────────────────────────────
 
-BINANCE_API_KEY: str = os.getenv("BINANCE_API_KEY", "")
-BINANCE_API_SECRET: str = os.getenv("BINANCE_API_SECRET", "")
+def _load_api_keys(prefix: str) -> List[str]:
+    keys = []
+    # 1. Usar plural si existe (e.g. GROQ_API_KEYS=key1,key2,key3)
+    plural_env = os.getenv(f"{prefix}S", "")
+    if plural_env:
+        keys.extend([k.strip() for k in plural_env.split(",") if k.strip()])
+    
+    # 2. Añadir el default
+    default_key = os.getenv(prefix, "")
+    if default_key and default_key not in keys:
+        keys.append(default_key)
+        
+    # 3. Añadir los numerados _1, _2, _3...
+    for i in range(1, 20):
+        k = os.getenv(f"{prefix}_{i}", "")
+        if k and k not in keys:
+            keys.append(k)
+            
+    return keys
 
-TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
+OPENAI_API_KEYS: List[str] = _load_api_keys("OPENAI_API_KEY")
+GROQ_API_KEYS: List[str] = _load_api_keys("GROQ_API_KEY")
+GOOGLE_API_KEYS: List[str] = _load_api_keys("GOOGLE_API_KEY")
 
-OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
-GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
+# Legacy strings fallback
+OPENAI_API_KEY: str = OPENAI_API_KEYS[0] if OPENAI_API_KEYS else ""
+GROQ_API_KEY: str = GROQ_API_KEYS[0] if GROQ_API_KEYS else ""
+GOOGLE_API_KEY: str = GOOGLE_API_KEYS[0] if GOOGLE_API_KEYS else ""
 
 
 # ──────────────────────────────────────────────

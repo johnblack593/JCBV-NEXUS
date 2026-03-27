@@ -1,0 +1,15 @@
+[
+    {
+        "symbol": "BTCUSDT",
+        "side": "BUY",
+        "entry": 40008.0,
+        "quantity": 0.1,
+        "stop_loss": 39000.0,
+        "take_profit": 42000.0,
+        "confidence": 0.75,
+        "commission": 2.0004,
+        "timestamp": "2026-03-26T23:04:13.920674-05:00",
+        "status": "CLOSED_TP",
+        "pnl": 197.10000000000002
+    }
+]

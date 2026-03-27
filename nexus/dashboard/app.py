@@ -11,11 +11,11 @@ import asyncio
 import random
 import time
 from typing import List, Dict, Any
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException  # type: ignore
+from fastapi.responses import HTMLResponse  # type: ignore
+from fastapi.staticfiles import StaticFiles  # type: ignore
+from fastapi.middleware.cors import CORSMiddleware  # type: ignore
+from pydantic import BaseModel  # type: ignore
 
 # --- ESTADO GLOBAL (Simulando Memoria del Engine en Frontend) ---
 SYSTEM_STATE: Dict[str, Any] = {
