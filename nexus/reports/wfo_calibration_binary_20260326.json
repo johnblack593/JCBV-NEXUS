@@ -1,0 +1,357 @@
+{
+    "wfo_log": [
+        {
+            "window": 1,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 2,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 3,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 4,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 5,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 6,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 7,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 8,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 9,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 10,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 11,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 12,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 13,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 14,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 15,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 16,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 17,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 18,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 19,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 20,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 21,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 22,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 23,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 24,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        },
+        {
+            "window": 25,
+            "best_params": {
+                "min_confidence": 0.6,
+                "expiry_bars": 3
+            },
+            "is_sharpe": 0.0,
+            "oos_sharpe": 0.0,
+            "is_bars": 2017,
+            "oos_bars": 577
+        }
+    ],
+    "stitched_equity": [
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0
+    ]
+}

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
+import json
 import logging
 from datetime import timedelta
 from typing import List, Dict, Any, Tuple
@@ -25,27 +26,29 @@ except ImportError:
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Importamos la estrategia desde el runner existente
-from backtesting.backtest_runner import NexusStrategy, calculate_metrics
+from backtesting.backtest_runner import NexusSpotStrategy, calculate_metrics
 
 logger = logging.getLogger("nexus.wfo")
 if not logger.handlers:
-    from config.settings import setup_logging
+    import config.settings
     # setup basic logger
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(name)s | %(levelname)s | %(message)s")
 
 class WalkForwardOptimizer:
     """Motor de validación institucional rolling-window."""
     
-    def __init__(self, csv_path: str, is_days: int = 90, oos_days: int = 30):
+    def __init__(self, csv_path: str, is_days: float = 90.0, oos_days: float = 30.0, trading_mode: str = "spot"):
         """
         Args:
             csv_path: Ruta al archivo CSV procesado de Binance.
-            is_days: Longitud de la ventana In-Sample (entrenamiento).
-            oos_days: Longitud de la ventana Out-of-Sample (testeo).
+            is_days: Longitud de la ventana In-Sample (entrenamiento). Acepta decimales para Binarias.
+            oos_days: Longitud de la ventana Out-of-Sample (testeo). Acepta decimales para Binarias.
+            trading_mode: "spot" o "binary"
         """
         self.csv_path = csv_path
-        self.is_days = is_days
-        self.oos_days = oos_days
+        self.is_days = float(is_days)
+        self.oos_days = float(oos_days)
+        self.trading_mode = trading_mode
         
         logger.info("Cargando dataset histórico para WFO: %s", csv_path)
         self.raw_data = pd.read_csv(self.csv_path, parse_dates=['open_time'], index_col='open_time')
@@ -106,13 +109,26 @@ class WalkForwardOptimizer:
         )
         cerebro.adddata(data_feed)
         
-        # Inyectar hiperparámetros de WFO a la Estrategia Nexus
-        cerebro.addstrategy(
-            NexusStrategy,
-            sl_atr_mult=params.get("sl_atr_mult", 2.0),
-            tp_atr_mult=params.get("tp_atr_mult", 3.0),
-            min_confidence=params.get("min_confidence", 0.65)
-        )
+        if self.trading_mode == "binary":
+            from backtesting.binary_strategy import NexusBinaryStrategy
+            cerebro.broker.setcommission(commission=0.0) 
+            # Inyectar hiperparámetros de Binarias a la Estrategia Nexus
+            cerebro.addstrategy(
+                NexusBinaryStrategy,
+                min_confidence=params.get("min_confidence", 0.70),
+                payout_pct=0.85,
+                expiry_bars=3
+            )
+        else:
+            from backtesting.backtest_runner import NexusSpotStrategy
+            cerebro.broker.setcommission(commission=0.001) # 0.1% Taker Binance
+            # Inyectar hiperparámetros de Spot a la Estrategia Nexus
+            cerebro.addstrategy(
+                NexusSpotStrategy,
+                sl_atr_mult=params.get("sl_atr_mult", 2.0),
+                tp_atr_mult=params.get("tp_atr_mult", 3.0),
+                min_confidence=params.get("min_confidence", 0.65)
+            )
         
         # Para capturar la equity curve
         cerebro.addanalyzer(bt.analyzers.TimeReturn, _name='timereturn')
@@ -190,25 +206,39 @@ class WalkForwardOptimizer:
         }
 
 if __name__ == "__main__":
-    # Test stub
+    # Motor CLI de Validación WFO Multiple Timeframe
     import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--csv", type=str, default=str(os.path.join(os.path.dirname(__file__), "..", "data", "historical", "BTCUSDT_1h.csv")))
+    parser = argparse.ArgumentParser(description="NEXUS Walk-Forward Optimizer")
+    parser.add_argument("--csv", type=str, default=str(os.path.join(os.path.dirname(__file__), "..", "data", "historical", "BTCUSDT_1h.csv")), help="Ruta al CSV histórico")
+    parser.add_argument("--is-days", type=float, default=90.0, help="Días de In-Sample (acepta decimales para Binarias)")
+    parser.add_argument("--oos-days", type=float, default=30.0, help="Días de Out-Of-Sample (acepta decimales para Binarias)")
+    parser.add_argument("--mode", type=str, default="spot", choices=["spot", "binary"], help="Modo de Trading: spot o binary")
     args = parser.parse_args()
     
     if os.path.exists(args.csv):
-        # Usamos WFO pequeño (3 meses train, 1 mes test) para demo
-        wfo = WalkForwardOptimizer(args.csv, is_days=90, oos_days=30)
+        file_name = os.path.basename(args.csv).replace(".csv", "")
+        print(f"\n[NEXUS] Arrancando WFO Engine en {file_name} | Modo: {args.mode.upper()} | IS={args.is_days}d OOS={args.oos_days}d")
         
-        # Grid muy reducido para test rápido
+        wfo = WalkForwardOptimizer(args.csv, is_days=args.is_days, oos_days=args.oos_days, trading_mode=args.mode)
+        
+        # Grid institucional rápido
         grid = [
             {"sl_atr_mult": 1.5, "tp_atr_mult": 2.5, "min_confidence": 0.60},
             {"sl_atr_mult": 2.0, "tp_atr_mult": 3.0, "min_confidence": 0.65},
         ]
         
+        # Ejecutar 
         res = wfo.execute_wfo(grid)
-        print("\n--- Walk-Forward Completed ---")
+        
+        # Reconstruir la serializacion JSON estricta (necesaria para el Dashboard)
+        os.makedirs(os.path.join(os.path.dirname(__file__), "..", "reports"), exist_ok=True)
+        report_path = os.path.join(os.path.dirname(__file__), "..", "reports", "wfo_results.json")
+        
+        with open(report_path, "w", encoding="utf-8") as f:
+            json.dump(res, f, indent=4)
+            
+        print(f"\n--- Walk-Forward Completed & Saved to {report_path} ---")
         for log in res["wfo_log"]:
             print(f"Win {log['window']}: P={log['best_params']} | IS Sharpe={log['is_sharpe']:.2f} | OOS Sharpe={log['oos_sharpe']:.2f}")
     else:
-        print(f"Error: CSV no encontrado en {args.csv}")
+        print(f"[!] Error Crítico: CSV no encontrado en la ruta {args.csv}")

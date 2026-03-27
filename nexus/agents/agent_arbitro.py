@@ -201,11 +201,13 @@ class AgentArbitro:
         temperature: float = 0.1,
         # Ollama legacy params (deshabilitado)
         base_url: str = "http://localhost:11434",
+        trading_mode: str = "standard",
     ) -> None:
         self.provider = provider
         self.model_name = model_name or _DEFAULT_MODELS.get(provider, "llama3")
         self.temperature = temperature
         self.base_url = base_url  # Solo para Ollama
+        self.trading_mode = trading_mode
 
         self._llm: Any = None
         self._chain: Any = None
@@ -220,6 +222,33 @@ class AgentArbitro:
         self._decision_cache: Dict[str, Dict[str, Any]] = {}
         self._CACHE_TTL_SECS = 3600  # 1 hora maximo de vida para el cache
         self._PRICE_TOLERANCE = 0.003 # 0.3% maximo de variacion permitida
+
+        # ── Global WFO Timestamp Cache ────────────────────────────────────
+        self._global_wfo_cache_path = os.path.join(
+            os.path.dirname(__file__), "..", "logs", "llm_historical_cache.json"
+        )
+        self._global_wfo_cache: Dict[str, Any] = {}
+        self._load_global_cache()
+
+    def _load_global_cache(self) -> None:
+        """Carga la caché global de Backtesting desde el disco para evitar re-inferencias WFO."""
+        if os.path.exists(self._global_wfo_cache_path):
+            try:
+                with open(self._global_wfo_cache_path, "r", encoding="utf-8") as f:
+                    self._global_wfo_cache = json.load(f)
+            except Exception as e:
+                logger.error("Error leyendo caché global: %s", e)
+                self._global_wfo_cache = {}
+
+    def _save_global_cache(self, timestamp: str, decision: Dict[str, Any]) -> None:
+        """Guarda permanentemente una decisión del LLM en disco ligada a un Timestamp histórico."""
+        self._global_wfo_cache[timestamp] = decision
+        try:
+            os.makedirs(os.path.dirname(self._global_wfo_cache_path), exist_ok=True)
+            with open(self._global_wfo_cache_path, "w", encoding="utf-8") as f:
+                json.dump(self._global_wfo_cache, f, indent=2)
+        except Exception as e:
+            logger.error("Error escribiendo caché global: %s", e)
 
     # ── Lifecycle ─────────────────────────────────────────────────────
 
@@ -426,6 +455,15 @@ class AgentArbitro:
         symbol = market_context.get("symbol", "UNKNOWN") if market_context else "UNKNOWN"
         current_price = market_context.get("price", 0.0) if market_context else 0.0
 
+        # Extraccion del Timestamp del backtest (inyectado por NexusStrategy)
+        dt_str = market_context.get("timestamp") if market_context else None
+        
+        # ── Global WFO Timestamp Cache ────────────────────────────────
+        if dt_str and dt_str in self._global_wfo_cache:
+            decision_data = self._global_wfo_cache[dt_str]
+            logger.info("💾 [Global Cache Hit] %s: Reutilizando razonamiento LLM estatico", dt_str)
+            return decision_data
+
         # ── LLM Optimization: Stateful Context Cache ──────────────────
         if symbol != "UNKNOWN":
             cached = self._decision_cache.get(symbol)
@@ -455,6 +493,23 @@ class AgentArbitro:
         # ── Intentar deliberacion con LLM (con failover) ──────────────
         used_provider = "heuristic"
         context_str = json.dumps(market_context or {}, indent=2)
+
+        if self.trading_mode == "fattah":
+            fattah_state_path = os.path.join(os.path.dirname(__file__), "..", "data", "fattah_state.json")
+            if os.path.exists(fattah_state_path):
+                try:
+                    with open(fattah_state_path, "r", encoding="utf-8") as f:
+                        f_state = json.load(f)
+                    fear_idx = f_state.get("fear_index", {})
+                    context_str += (
+                        f"\n\n== MODO FATTAH (MACRO-HEDGE) ==\n"
+                        f"FEAR REGIME: {fear_idx.get('regime', 'UNKNOWN')}\n"
+                        f"FEAR SCORE: {fear_idx.get('score', 0)}/100\n"
+                        f"SENTIMENT REASON: {fear_idx.get('sentiment_reason', 'No data')}\n"
+                        f"INSTRUCCIÓN: Prioriza la rotación a activos refugio si Fear Score > 60."
+                    )
+                except Exception as e:
+                    logger.warning(f"No se pudo cargar fattah_state.json: {e}")
 
         if self._initialized and self._chain is not None:
             try:
@@ -508,6 +563,10 @@ class AgentArbitro:
             result["position_size_pct"],
             result["reasoning"][:100],
         )
+
+        # ── Guardar en Cache Global (WFO) ─────────────────────────────
+        if dt_str:
+            self._save_global_cache(dt_str, result)
 
         # ── Guardar en Cache si la decision fue HOLD ──────────────────
         if symbol != "UNKNOWN" and result["decision"] == "HOLD":

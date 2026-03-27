@@ -56,6 +56,7 @@ from core.risk_manager import QuantRiskManager  # type: ignore
 from core.execution_engine import ExecutionEngine, OrderRequest, OrderSide, OrderType  # type: ignore
 from core.evolutionary_agent import EvolutionaryAgent  # type: ignore
 from core.structured_logger import get_quant_logger # type: ignore
+from scripts.auto_calibrate import WFOAutoCalibrator  # type: ignore
 
 # ── Agents ──────────────────────────────────────
 from agents.agent_bull import AgentBull  # type: ignore
@@ -286,8 +287,8 @@ class NexusSystem:
     PAPER_DURATION_DAYS = 14       # 2 semanas de paper trading
     PAPER_SHARPE_GATE = 1.2        # Sharpe mínimo para activar LIVE
     CYCLE_INTERVAL_SECS = 60       # Intervalo entre ciclos (1 minuto)
-    MAX_OPEN_POSITIONS = 3         # Máximo de posiciones simultáneas
-    MIN_CONFIDENCE = 0.65          # Confianza mínima del árbitro
+    MAX_OPEN_POSITIONS = 3         # Máximo de posiciones simultáneas (se sobreescribe con WFO)
+    MIN_CONFIDENCE = 0.65          # Confianza mínima del árbitro (se sobreescribe con WFO)
 
     def __init__(
         self,
@@ -329,6 +330,10 @@ class NexusSystem:
             risk_manager=self.risk_manager,
         )
 
+        # ── WFO Auto-Calibrator (Fase 12) ─────────────
+        self.calibrator = WFOAutoCalibrator()
+        self._wfo_params = self.calibrator.load_active_params()
+
         # ── Paper Trader ──────────────────────────────
         self.paper_trader = PaperTrader(initial_capital=initial_capital)
 
@@ -357,6 +362,8 @@ class NexusSystem:
         # Scheduling
         self.telegram.setup_schedule()
         self.evolutionary.setup_schedule()
+        self.calibrator.setup_schedule()
+        logger.info("WFO Auto-Calibrator programado (sábados 00:00 GMT-5)")
 
         # Execution engine solo en modo LIVE
         if self.mode == TradingMode.LIVE:
@@ -384,9 +391,14 @@ class NexusSystem:
                 # ── Trading Cycle ─────────────────────
                 await self._trading_cycle()
 
-                # ── Scheduling (reportes, evolución) ──
+                # ── Scheduling (reportes, evolución, calibración) ──
                 self.telegram.run_pending_schedules()
                 self.evolutionary.run_pending()
+                self.calibrator.run_pending()
+
+                # ── Hot-Reload WFO Params (cada 60 ciclos ≈ 1h) ──
+                if self._cycle_count % 60 == 0:
+                    self._wfo_params = self.calibrator.load_active_params()
 
                 # ── Paper → Live Gate ─────────────────
                 if self.mode == TradingMode.PAPER:
@@ -504,7 +516,9 @@ class NexusSystem:
         confidence = decision.get("confidence", 0)
         action = decision.get("decision", "HOLD")
 
-        if action == "HOLD" or confidence < self.MIN_CONFIDENCE:
+        # Hot-Reload: MIN_CONFIDENCE desde WFO params
+        active_min_conf = self._wfo_params.get("spot", {}).get("min_confidence", self.MIN_CONFIDENCE)
+        if action == "HOLD" or confidence < active_min_conf:
             return
 
         # ── Calcular ATR para sizing y SL/TP ──────────────────────
@@ -580,15 +594,17 @@ class NexusSystem:
             logger.info("Max posiciones (%d) alcanzadas", self.MAX_OPEN_POSITIONS)
             return
 
-        # ── Calcular SL/TP con ATR ────────────────────────────────
+        # ── Calcular SL/TP con ATR (Hot-Reload desde WFO) ──────────
         side = "BUY" if action == "BUY" else "SELL"
+        sl_mult = self._wfo_params.get("spot", {}).get("sl_atr_mult", 2.0)
+        tp_mult = self._wfo_params.get("spot", {}).get("tp_atr_mult", 3.0)
 
         if side == "BUY":
-            stop_loss = current_price - (2.0 * atr)
-            take_profit = current_price + (3.0 * atr)
+            stop_loss = current_price - (sl_mult * atr)
+            take_profit = current_price + (tp_mult * atr)
         else:
-            stop_loss = current_price + (2.0 * atr)
-            take_profit = current_price - (3.0 * atr)
+            stop_loss = current_price + (sl_mult * atr)
+            take_profit = current_price - (tp_mult * atr)
 
         # ── Calcular quantity ─────────────────────────────────────
         quantity = (capital * position_pct / 100) / current_price

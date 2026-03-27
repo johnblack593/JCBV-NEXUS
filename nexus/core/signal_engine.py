@@ -646,9 +646,120 @@ class TechnicalSignalEngine:
             "indicators": {},
         }
 
+    # ══════════════════════════════════════════════════════════════════
+    #  Multi-Timeframe Fractal Analysis (Fase 9)
+    # ══════════════════════════════════════════════════════════════════
+
+    def generate_mtf_signal(
+        self, tf_dataframes: Dict[str, pd.DataFrame]
+    ) -> Dict[str, Any]:
+        """
+        Análisis Fractal Multi-Timeframe.
+        Evalúa indicadores independientes en cada temporalidad y genera
+        un contexto LLM unificado con la perspectiva Macro → Micro.
+
+        Args:
+            tf_dataframes: dict con {timeframe_label: dataframe}
+                Ejemplo: {"1d": df_daily, "4h": df_4h, "1h": df_1h, "5m": df_5m}
+
+        Returns:
+            dict con:
+              - "signal": señal final ponderada por contexto macro
+              - "confidence": confianza ajustada
+              - "mtf_context": string descriptivo para el LLM
+              - "timeframe_signals": señales individuales por timeframe
+              - "macro_bias": "BULLISH" | "BEARISH" | "NEUTRAL"
+        """
+        if not tf_dataframes:
+            return self._empty_signal("No se proporcionaron DataFrames MTF")
+
+        # Orden de prioridad Macro → Micro
+        tf_order = ["1d", "4h", "1h", "30m", "15m", "5m", "1m"]
+        sorted_tfs = sorted(
+            tf_dataframes.keys(),
+            key=lambda x: tf_order.index(x) if x in tf_order else 99,
+        )
+
+        tf_signals: Dict[str, Dict[str, Any]] = {}
+        macro_votes_buy = 0
+        macro_votes_sell = 0
+        macro_tfs = {"1d", "4h", "1h"}  # Temporalidades consideradas "macro"
+
+        for tf in sorted_tfs:
+            df = tf_dataframes[tf]
+            if df is None or df.empty or len(df) < 2:
+                continue
+            sig = self.generate_signal(df)
+            tf_signals[tf] = sig
+
+            if tf in macro_tfs:
+                if sig["signal"] == "BUY":
+                    macro_votes_buy += 1
+                elif sig["signal"] == "SELL":
+                    macro_votes_sell += 1
+
+        # Determinar sesgo macro
+        if macro_votes_buy > macro_votes_sell:
+            macro_bias = "BULLISH"
+        elif macro_votes_sell > macro_votes_buy:
+            macro_bias = "BEARISH"
+        else:
+            macro_bias = "NEUTRAL"
+
+        # Construir contexto narrativo para el LLM
+        context_parts = []
+        for tf in sorted_tfs:
+            if tf in tf_signals:
+                sig = tf_signals[tf]
+                emoji = "🟢" if sig["signal"] == "BUY" else "🔴" if sig["signal"] == "SELL" else "⚪"
+                context_parts.append(
+                    f"{emoji} [{tf.upper()}] {sig['signal']} (conf={sig['confidence']:.2f}) — {sig['reason'][:120]}"
+                )
+
+        mtf_context = (
+            f"SESGO MACRO: {macro_bias}\n" + "\n".join(context_parts)
+        )
+
+        # Señal final: la menor temporalidad que tenga señal, 
+        # pero SOLO si está alineada con el sesgo macro
+        final_signal = "HOLD"
+        final_confidence = 0.0
+        final_reason = "Sin alineación fractal"
+
+        # Buscar señal micro (de menor a mayor temporalidad)
+        for tf in reversed(sorted_tfs):
+            if tf in tf_signals:
+                sig = tf_signals[tf]
+                if sig["signal"] in ("BUY", "SELL"):
+                    # Verificar alineación con el sesgo macro
+                    aligned = (
+                        (sig["signal"] == "BUY" and macro_bias == "BULLISH")
+                        or (sig["signal"] == "SELL" and macro_bias == "BEARISH")
+                    )
+                    if aligned:
+                        final_signal = sig["signal"]
+                        # Boost de confianza por alineación fractal
+                        final_confidence = min(sig["confidence"] * 1.15, 0.95)
+                        final_reason = (
+                            f"Fractal {tf}: {sig['signal']} alineado con sesgo macro {macro_bias}"
+                        )
+                        break
+
+        return {
+            "signal": final_signal,
+            "confidence": round(final_confidence, 4),
+            "reason": final_reason,
+            "timestamp": datetime.now(timezone.utc),
+            "mtf_context": mtf_context,
+            "timeframe_signals": tf_signals,
+            "macro_bias": macro_bias,
+            "indicators": {},
+        }
+
     def __repr__(self) -> str:
         return (
             f"<TechnicalSignalEngine indicators=5 "
             f"min_consensus={self._min_consensus} "
             f"weights={self._weights}>"
         )
+

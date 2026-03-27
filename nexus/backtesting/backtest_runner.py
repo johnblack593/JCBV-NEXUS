@@ -167,9 +167,9 @@ def load_csv_data(csv_path: Optional[Path] = None) -> "bt.feeds.PandasData":
 #  PASO 2: Estrategia Backtrader — NexusStrategy
 # ══════════════════════════════════════════════════════════════════════
 
-class NexusStrategy(bt.Strategy):
+class NexusSpotStrategy(bt.Strategy):
     """
-    Estrategia NEXUS para backtrader.
+    Estrategia NEXUS para SPOT / FUTUROS (Margin Trading).
 
     Reglas:
     - Entrar solo si arbitro confidence ≥ 0.65
@@ -198,6 +198,7 @@ class NexusStrategy(bt.Strategy):
         self.bull = AgentBull()
         self.bear = AgentBear()
         self.arbitro = AgentArbitro()
+        self.arbitro.initialize()  # Encendemos la maquina de LLM para la arquitectura Event-Driven
 
         # Estado
         self._open_orders: Dict[str, Any] = {}
@@ -234,18 +235,41 @@ class NexusStrategy(bt.Strategy):
         # Agentes construyen argumentos
         self.bull.build_argument(current_price, technical)
         self.bear.build_argument(current_price, technical)
-
-        # Árbitro delibera
-        risk_metrics = {
-            "max_drawdown": self._current_drawdown(),
-            "var_95": 0.0,
-            "current_exposure": self._current_exposure(),
-        }
-        decision = self.arbitro.deliberate(
-            bull_state=self.bull.get_state(),
-            bear_state=self.bear.get_state(),
-            risk_metrics=risk_metrics,
-        )
+        
+        bull_state = self.bull.get_state()
+        bear_state = self.bear.get_state()
+        
+        # ── EVENT-DRIVEN GATING (Fase 8) ─────────────────────────
+        # 1. Si ya estamos posicionados, NO consultamos al Árbitro. 
+        # La gestión de salida es matemática pura mediante ATR Trailing Stops (más abajo en _manage_active_trade).
+        if self.position:
+            decision = {"decision": "HOLD", "confidence": 0.0, "reasoning": "Gate: Trailing Stop gestionando salida."}
+        else:
+            bull_strength = bull_state.get("strength", 0.0)
+            bear_strength = bear_state.get("strength", 0.0)
+            max_strength = max(bull_strength, bear_strength)
+            
+            # 2. Asymmetric Noise Filter: Si no hay anomalía direccional clara, silenciamos al LLM.
+            if max_strength < 6.5:
+                decision = {"decision": "HOLD", "confidence": 0.0, "reasoning": "Gate: Ruido de mercado detectado. LLM en reposo."}
+            else:
+                # 3. Apertura del Ojo Cuántico: Anomalía detectada, invocamos deliberación
+                risk_metrics = {
+                    "max_drawdown": self._current_drawdown(),
+                    "var_95": 0.0,
+                    "current_exposure": self._current_exposure(),
+                }
+                
+                # Inyectamos el Timestamp puro para el Global Caching
+                dt_str = self.data.datetime.datetime(0).isoformat()
+                market_ctx = {"symbol": "BTCUSDT", "price": current_price, "timestamp": dt_str}
+                
+                decision = self.arbitro.deliberate(
+                    bull_state=bull_state,
+                    bear_state=bear_state,
+                    risk_metrics=risk_metrics,
+                    market_context=market_ctx
+                )
 
         # ── Ejecutar decisión ─────────────────────────────────────
         confidence = decision.get("confidence", 0)
@@ -447,9 +471,9 @@ def calculate_metrics(
         "max_drawdown": round(max_drawdown * 100, 2),  # type: ignore
         "win_rate": round(win_rate * 100, 2),  # type: ignore
         "profit_factor": round(profit_factor, 4),  # type: ignore
-        "calmar_ratio": round(float(calmar_ratio), 4) if calmar_ratio != float("inf") else float("inf"),
-        "tail_ratio": round(float(tail_ratio), 4),
-        "information_ratio": round(float(information_ratio), 4),
+        "calmar_ratio": round(float(calmar_ratio), 4) if calmar_ratio != float("inf") else float("inf"),  # type: ignore
+        "tail_ratio": round(float(tail_ratio), 4),  # type: ignore
+        "information_ratio": round(float(information_ratio), 4),  # type: ignore
         "total_trades": len(trades),
         "initial_capital": initial_capital,
         "final_capital": round(float(equity[-1]), 2),  # type: ignore
@@ -648,25 +672,29 @@ def _build_html(
     heatmap_img: str,
     trades: List[Dict[str, Any]],
 ) -> str:
-    """Genera el HTML completo del reporte."""
+    """Genera el HTML completo del reporte con diseño Glassmorphism Institucional."""
 
     sharpe_color = "#00d4aa" if metrics.get("sharpe_ratio", 0) >= 1.5 else "#ff4757"
     sortino_color = "#00d4aa" if metrics.get("sortino_ratio", 0) >= 2.0 else "#ff4757"
     dd_color = "#00d4aa" if metrics.get("max_drawdown", 100) < 20 else "#ff4757"
     wr_color = "#00d4aa" if metrics.get("win_rate", 0) > 55 else "#ff4757"
+    tr_color = "#00d4aa" if metrics.get("total_return", 0) > 0 else "#ff4757"
+    tail_color = "#00d4aa" if metrics.get("tail_ratio", 0) > 1 else "#ff4757"
 
     # Trades table rows
     trade_rows = ""
-    for t in trades[:50]:  # Mostrar últimos 50  # type: ignore
+    for t in trades[:50]:  # type: ignore
+        action = t.get('action', '')
+        action_class = 'buy' if action == 'BUY' else 'sell'
         trade_rows += f"""
         <tr>
             <td>{t.get('datetime', '')}</td>
-            <td style="color:{'#00d4aa' if t.get('action')=='BUY' else '#ff4757'}">{t.get('action', '')}</td>
-            <td>${t.get('price', 0):,.2f}</td>
+            <td><span class="badge {action_class}">{action}</span></td>
+            <td style="font-weight:600;">${t.get('price', 0):,.2f}</td>
             <td>{t.get('size', 0):.6f}</td>
-            <td>{t.get('confidence', 0):.2f}</td>
-            <td>${t.get('sl', 0):,.2f}</td>
-            <td>${t.get('tp', 0):,.2f}</td>
+            <td style="color:var(--accent-purple); font-weight:600;">{t.get('confidence', 0):.2f}</td>
+            <td style="color:#ff4757;">${t.get('sl', 0):,.2f}</td>
+            <td style="color:#00d4aa;">${t.get('tp', 0):,.2f}</td>
         </tr>"""
 
     return f"""<!DOCTYPE html>
@@ -677,140 +705,167 @@ def _build_html(
     <title>NEXUS Backtest Report</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
-            background: #0d0d1a;
-            color: #e0e0e0;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            padding: 2rem;
+        :root {{
+            --bg-main: #07070e;
+            --bg-panel: rgba(20, 20, 30, 0.6);
+            --accent-cyan: #00d4aa;
+            --accent-purple: #7c3aed;
+            --text-main: #e0e0f8;
+            --text-dim: #8888a0;
+            --glass-border: rgba(255, 255, 255, 0.05);
+            --danger: #ff4757;
         }}
-        h1 {{
-            text-align: center;
-            font-size: 1.8rem;
-            background: linear-gradient(135deg, #00d4aa, #7c3aed);
+        @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(-10px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+        @keyframes slideUp {{ from {{ opacity: 0; transform: translateY(20px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+        body {{
+            background: var(--bg-main);
+            color: var(--text-main);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            padding: 2rem 3rem;
+            min-height: 100vh;
+        }}
+        .glass-panel {{
+            background: var(--bg-panel);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            padding: 1.5rem;
+        }}
+        .header {{ text-align: center; margin-bottom: 2.5rem; animation: fadeIn 0.8s ease-out; }}
+        .header h1 {{
+            font-size: 2.4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 0.5rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
         }}
-        .subtitle {{
-            text-align: center;
-            color: #666;
-            margin-bottom: 2rem;
-            font-size: 0.9rem;
-        }}
+        .header .subtitle {{ color: var(--text-dim); font-size: 0.95rem; font-weight: 500; letter-spacing: 0.5px; }}
         .metrics-grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
         }}
         .metric-card {{
-            background: #1a1a2e;
-            border-radius: 12px;
-            padding: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+            animation: slideUp 0.6s ease-out backwards;
             text-align: center;
-            border: 1px solid #2a2a4a;
         }}
-        .metric-card .label {{ color: #888; font-size: 0.75rem; text-transform: uppercase; }}
-        .metric-card .value {{ font-size: 1.6rem; font-weight: 700; margin-top: 0.3rem; }}
-        .chart {{ margin-bottom: 2rem; text-align: center; }}
-        .chart img {{ width: 100%; max-width: 1200px; border-radius: 12px; }}
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1rem;
-            font-size: 0.85rem;
+        .metric-card:nth-child(1) {{ animation-delay: 0.05s; }}
+        .metric-card:nth-child(2) {{ animation-delay: 0.1s; }}
+        .metric-card:nth-child(3) {{ animation-delay: 0.15s; }}
+        .metric-card:nth-child(4) {{ animation-delay: 0.2s; }}
+        .metric-card:nth-child(5) {{ animation-delay: 0.25s; }}
+        .metric-card:nth-child(6) {{ animation-delay: 0.3s; }}
+        .metric-card:nth-child(7) {{ animation-delay: 0.35s; }}
+        .metric-card:nth-child(8) {{ animation-delay: 0.4s; }}
+        
+        .metric-card:hover {{
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0, 212, 170, 0.12);
+            border-color: rgba(0, 212, 170, 0.3);
         }}
-        th {{ background: #1a1a2e; padding: 0.6rem; text-align: left; color: #00d4aa; }}
-        td {{ padding: 0.5rem; border-bottom: 1px solid #1a1a2e; }}
-        tr:hover td {{ background: #1a1a2e; }}
+        .metric-card .icon-title {{ display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }}
+        .metric-card .value {{ font-size: 1.8rem; font-weight: 800; text-shadow: 0 0 15px rgba(255,255,255,0.05); }}
         .section-title {{
-            font-size: 1.2rem;
-            margin: 2rem 0 1rem;
-            color: #e0e0e0;
-            border-left: 3px solid #00d4aa;
-            padding-left: 0.8rem;
+            font-size: 1.25rem; font-weight: 700; color: var(--text-main);
+            margin: 3rem 0 1.2rem; display: flex; align-items: center; gap: 10px;
+            text-transform: uppercase; letter-spacing: 1px;
+            animation: fadeIn 0.8s ease-out;
         }}
+        .section-title::before {{ content: ""; display: block; width: 4px; height: 18px; background: var(--accent-cyan); border-radius: 2px; box-shadow: 0 0 8px var(--accent-cyan); }}
+        .chart-container {{ text-align: center; margin-bottom: 2.5rem; animation: slideUp 0.8s ease-out backwards; animation-delay: 0.2s; }}
+        .chart-container img {{ width: 100%; max-width: 1200px; border-radius: 8px; display: block; margin: 0 auto; }}
+        .table-wrapper {{ overflow-x: auto; animation: slideUp 0.8s ease-out backwards; animation-delay: 0.4s; padding: 0; }}
+        table {{ width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left; }}
+        th {{ background: rgba(0,0,0,0.5); padding: 1.2rem 1rem; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; position: sticky; top: 0; backdrop-filter: blur(10px); border-bottom: 1px solid rgba(0,212,170,0.2); }}
+        td {{ padding: 1rem; border-bottom: 1px solid var(--glass-border); color: var(--text-main); transition: background 0.2s; }}
+        tr:hover td {{ background: rgba(0, 212, 170, 0.05); }}
+        tr:last-child td {{ border-bottom: none; }}
+        .badge {{ padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px; }}
+        .badge.buy {{ background: rgba(0, 212, 170, 0.15); color: #00d4aa; border: 1px solid rgba(0, 212, 170, 0.3); }}
+        .badge.sell {{ background: rgba(255, 71, 87, 0.15); color: #ff4757; border: 1px solid rgba(255, 71, 87, 0.3); }}
     </style>
 </head>
 <body>
-    <h1>NEXUS Backtest Report</h1>
-    <p class="subtitle">BTCUSDT 1H | Strategy: TechnicalSignalEngine + AgentArbitro</p>
+    <div class="header">
+        <h1>NEXUS Institutional Analytics</h1>
+        <p class="subtitle">AUTOMATED BACKTESTING ENGINE | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    </div>
 
     <div class="metrics-grid">
-        <div class="metric-card">
-            <div class="label">Total Return</div>
-            <div class="value" style="color:{'#00d4aa' if metrics.get('total_return',0)>0 else '#ff4757'}">{metrics.get('total_return',0):+.2f}%</div>
+        <div class="glass-panel metric-card">
+            <div class="icon-title">📈 Total Return</div>
+            <div class="value" style="color:{tr_color}">{metrics.get('total_return',0):+.2f}%</div>
         </div>
-        <div class="metric-card">
-            <div class="label">Buy & Hold</div>
-            <div class="value" style="color:#7c3aed">{metrics.get('buy_hold_return',0):+.2f}%</div>
+        <div class="glass-panel metric-card">
+            <div class="icon-title">💎 Buy &amp; Hold</div>
+            <div class="value" style="color:var(--accent-purple)">{metrics.get('buy_hold_return',0):+.2f}%</div>
         </div>
-        <div class="metric-card">
-            <div class="label">Sharpe Ratio</div>
+        <div class="glass-panel metric-card">
+            <div class="icon-title">⚖️ Sharpe Ratio</div>
             <div class="value" style="color:{sharpe_color}">{metrics.get('sharpe_ratio',0):.4f}</div>
         </div>
-        <div class="metric-card">
-            <div class="label">Sortino Ratio</div>
-            <div class="value" style="color:{sortino_color}">{metrics.get('sortino_ratio',0):.4f}</div>
-        </div>
-        <div class="metric-card">
-            <div class="label">Max Drawdown</div>
+        <div class="glass-panel metric-card">
+            <div class="icon-title">🛡️ Max Drawdown</div>
             <div class="value" style="color:{dd_color}">{metrics.get('max_drawdown',0):.2f}%</div>
         </div>
-        <div class="metric-card">
-            <div class="label">Win Rate</div>
+        <div class="glass-panel metric-card">
+            <div class="icon-title">🎯 Win Rate</div>
             <div class="value" style="color:{wr_color}">{metrics.get('win_rate',0):.2f}%</div>
         </div>
-        <div class="metric-card">
-            <div class="label">Profit Factor</div>
-            <div class="value">{metrics.get('profit_factor',0):.2f}</div>
+        <div class="glass-panel metric-card">
+            <div class="icon-title">💰 Profit Factor</div>
+            <div class="value" style="color:var(--text-main)">{metrics.get('profit_factor',0):.2f}</div>
         </div>
-        <div class="metric-card">
-            <div class="label">Calmar Ratio</div>
-            <div class="value">{metrics.get('calmar_ratio',0):.2f}</div>
+        <div class="glass-panel metric-card">
+            <div class="icon-title">⚡ Tail Ratio</div>
+            <div class="value" style="color:{tail_color}">{metrics.get('tail_ratio',0):.2f}</div>
         </div>
-        <div class="metric-card">
-            <div class="label">Tail Ratio</div>
-            <div class="value" style="color:{'#00d4aa' if metrics.get('tail_ratio',0)>1 else '#ff4757'}">{metrics.get('tail_ratio',0):.2f}</div>
-        </div>
-        <div class="metric-card">
-            <div class="label">Info Ratio</div>
-            <div class="value">{metrics.get('information_ratio',0):.2f}</div>
-        </div>
-        <div class="metric-card">
-            <div class="label">Total Trades</div>
-            <div class="value">{metrics.get('total_trades',0)}</div>
+        <div class="glass-panel metric-card">
+            <div class="icon-title">🔄 Total Trades</div>
+            <div class="value" style="color:var(--text-main)">{metrics.get('total_trades',0)}</div>
         </div>
     </div>
 
     <h2 class="section-title">Equity Curve</h2>
-    <div class="chart"><img src="{equity_img}" alt="Equity Curve"></div>
+    <div class="glass-panel chart-container"><img src="{equity_img}" alt="Equity Curve"></div>
 
     <h2 class="section-title">Drawdown Timeline</h2>
-    <div class="chart"><img src="{dd_img}" alt="Drawdown"></div>
+    <div class="glass-panel chart-container"><img src="{dd_img}" alt="Drawdown Timeline"></div>
 
-    {"<h2 class='section-title'>Monthly Returns Heatmap</h2><div class='chart'><img src='" + heatmap_img + "' alt='Heatmap'></div>" if heatmap_img else ""}
+    {"<h2 class='section-title'>Monthly Returns Heatmap</h2><div class='glass-panel chart-container'><img src='" + heatmap_img + "' alt='Monthly Heatmap'></div>" if heatmap_img else ""}
 
-    <h2 class="section-title">Trade Log (ultimos 50)</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Fecha</th>
-                <th>Accion</th>
-                <th>Precio</th>
-                <th>Size</th>
-                <th>Confidence</th>
-                <th>SL</th>
-                <th>TP</th>
-            </tr>
-        </thead>
-        <tbody>
-            {trade_rows if trade_rows else '<tr><td colspan="7" style="text-align:center;color:#666">Sin trades registrados</td></tr>'}
-        </tbody>
-    </table>
+    <h2 class="section-title">Trade Execution Log</h2>
+    <div class="glass-panel table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Action</th>
+                    <th>Fill Price</th>
+                    <th>Size</th>
+                    <th>AI Confidence</th>
+                    <th>Stop Loss</th>
+                    <th>Take Profit</th>
+                </tr>
+            </thead>
+            <tbody>
+                {trade_rows if trade_rows else '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:2rem;">No trade executions registered in this backtest window.</td></tr>'}
+            </tbody>
+        </table>
+    </div>
 
-    <p style="text-align:center;color:#444;margin-top:2rem;font-size:0.75rem">
-        Generado por NEXUS Trading System | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    <p style="text-align:center; color:var(--text-dim); margin-top:3rem; font-size:0.75rem; font-weight:600; letter-spacing:1px; text-transform:uppercase;">
+        NEXUS COMMAND TERMINAL &copy; {datetime.now().year}
     </p>
 </body>
 </html>"""
@@ -825,6 +880,7 @@ def run_backtest(
     initial_capital: float = 10_000.0,
     commission: float = 0.001,
     open_report: bool = True,
+    trading_mode: str = "spot",
 ) -> Dict[str, Any]:
     """
     Ejecuta el backtest completo: carga datos, corre estrategia,
@@ -835,6 +891,7 @@ def run_backtest(
         initial_capital: Capital inicial en USD
         commission:      Comisión por operación (0.001 = 0.1%)
         open_report:     Abrir reporte HTML en navegador al terminar
+        trading_mode:    "spot" (SL/TP Margin) o "binary" (HFT Fixed Yield)
 
     Returns:
         Dict con las métricas del backtest
@@ -849,11 +906,20 @@ def run_backtest(
 
     # 2. Configurar Cerebro
     cerebro = bt.Cerebro()
-    cerebro.addstrategy(NexusStrategy)
+    
+    if trading_mode == "binary":
+        try:
+            from nexus.backtesting.binary_strategy import NexusBinaryStrategy  # type: ignore
+        except ImportError:
+            from binary_strategy import NexusBinaryStrategy  # type: ignore
+        cerebro.addstrategy(NexusBinaryStrategy)
+        cerebro.broker.setcommission(commission=0.0)  # Cero comisiones en binarias (el spread es implícito en el payout 85%)
+    else:
+        cerebro.addstrategy(NexusSpotStrategy)
+        cerebro.broker.setcommission(commission=commission)
+        
     cerebro.adddata(data_feed)
-
     cerebro.broker.setcash(initial_capital)
-    cerebro.broker.setcommission(commission=commission)
 
     # 3. Ejecutar
     print(f"\n  Iniciando backtest con ${initial_capital:,.2f}...")

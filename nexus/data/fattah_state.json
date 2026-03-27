@@ -1,0 +1,21 @@
+{
+  "fear_index": {
+    "score": 14,
+    "regime": "STABLE (USD HEGEMONY INTACT)",
+    "quant_breakdown": {
+      "dxy_score": 0,
+      "vix_score": 23.9,
+      "gold_score": 0
+    },
+    "sentiment_score": 0,
+    "sentiment_reason": "No recent geopolitical news indicates total global stability.",
+    "timestamp": "2026-03-25T06:17:59.101983+00:00"
+  },
+  "optimal_allocation_pct": {
+    "USD_Stable": 70,
+    "Gold_GLD": 10,
+    "BTC_USD": 5,
+    "CHF_JPY": 5,
+    "Commodities": 10
+  }
+}
