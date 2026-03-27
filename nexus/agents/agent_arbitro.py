@@ -100,7 +100,7 @@ class LLMProvider(Enum):
 # Modelos por defecto para cada proveedor
 _DEFAULT_MODELS = {
     LLMProvider.GROQ: "llama-3.3-70b-versatile",
-    LLMProvider.GEMINI: "gemini-2.5-flash-preview-05-20",
+    LLMProvider.GEMINI: "gemini-1.5-flash",
     LLMProvider.OLLAMA: "llama3",
 }
 
@@ -531,24 +531,12 @@ class AgentArbitro:
                 used_provider = self._active_provider.value if self._active_provider else "llm"  # type: ignore
             except Exception as exc:
                 logger.warning(
-                    "Error en %s: %s — intentando failover...",
-                    self._active_provider.value if self._active_provider else "llm",  # type: ignore
-                    exc,
+                    "Error fatal inmanejable en el LLM Flow: %s", exc
                 )
-                # Intentar failover
-                result = self._try_failover(
-                    bull_argument, bull_strength,
-                    bear_argument, bear_strength,
-                    risk,
-                    context_str,
+                logger.warning("Todos los LLMs y rotadores fallaron, usando fallback heuristico")
+                result = self._deliberate_heuristic(
+                    bull_strength, bear_strength, risk
                 )
-                if result is not None:
-                    used_provider = "failover"
-                else:
-                    logger.warning("Todos los LLMs fallaron, usando fallback heuristico")
-                    result = self._deliberate_heuristic(
-                        bull_strength, bear_strength, risk
-                    )
         else:
             logger.warning("LLM no inicializado, usando fallback heuristico")
             result = self._deliberate_heuristic(
@@ -594,21 +582,42 @@ class AgentArbitro:
     # ══════════════════════════════════════════════════════════════════
 
     def _rotate_api_key(self, provider: LLMProvider) -> bool:
-        """Rota la API Key y reconstruye la cadena LLM activa si existen multiples tokens."""
-        if provider == LLMProvider.GROQ and len(self._groq_keys) > 1:
-            self._groq_idx = (self._groq_idx + 1) % len(self._groq_keys)
-            key_preview = f"...{self._groq_keys[self._groq_idx][-4:]}" if self._groq_keys[self._groq_idx] else "???"
-            logger.info("🔑 Rotando cuenta GROQ a slot %d (Token: %s)", self._groq_idx, key_preview)
-        elif provider == LLMProvider.GEMINI and len(self._gemini_keys) > 1:
-            self._gemini_idx = (self._gemini_idx + 1) % len(self._gemini_keys)
-            key_preview = f"...{self._gemini_keys[self._gemini_idx][-4:]}" if self._gemini_keys[self._gemini_idx] else "???"
-            logger.info("🔑 Rotando cuenta GEMINI a slot %d (Token: %s)", self._gemini_idx, key_preview)
-        else:
-            logger.warning("No hay cuentas alternativas para %s en el .env. Esperando enfriamiento forzoso (5s)...", provider.value)
-            time.sleep(5)
-            return True
-            
-        return self._init_provider(provider)
+        """Rota la API Key y reconstruye la cadena LLM activa si existen multiples tokens.
+           Alterna entre proveedores automáticamente si el stack primario se agota.
+        """
+        if provider == LLMProvider.GROQ:
+            if len(self._groq_keys) > 0:
+                next_idx = (self._groq_idx + 1) % len(self._groq_keys)
+                if next_idx == 0 and len(self._gemini_keys) > 0:
+                    logger.warning("⚠️ Todas las cuentas GROQ (Llama 3) de este ciclo exhaustas. INICIANDO FAILOVER MAESTRO A GEMINI.")
+                    return self.switch_provider(LLMProvider.GEMINI)
+                
+                self._groq_idx = next_idx
+                key_preview = f"...{self._groq_keys[self._groq_idx][-4:]}" if self._groq_keys[self._groq_idx] else "???"
+                logger.info("🔑 Rotando cuenta GROQ a slot %d (Token: %s)", self._groq_idx, key_preview)
+            else:
+                return self.switch_provider(LLMProvider.GEMINI)
+
+        elif provider == LLMProvider.GEMINI:
+            if len(self._gemini_keys) > 0:
+                next_idx = (self._gemini_idx + 1) % len(self._gemini_keys)
+                if next_idx == 0:
+                    logger.warning("⚠️ Ambos ciclos de agentes (GROQ y GEMINI) agotados. Forzando enfriamiento (5s)...")
+                    self.switch_provider(LLMProvider.GROQ)
+                    time.sleep(5)
+                    return True
+                
+                self._gemini_idx = next_idx
+                key_preview = f"...{self._gemini_keys[self._gemini_idx][-4:]}" if self._gemini_keys[self._gemini_idx] else "???"
+                logger.info("🔑 Rotando cuenta GEMINI a slot %d (Token: %s)", self._gemini_idx, key_preview)
+            else:
+                time.sleep(5)
+                return True
+                
+        provider_to_init = self._active_provider
+        if provider_to_init is not None:
+            return self._init_provider(provider_to_init)
+        return False
 
     def _deliberate_with_llm(
         self,
@@ -620,12 +629,13 @@ class AgentArbitro:
         context_str: str,
     ) -> Dict[str, Any]:
         """Invoca al LLM primario iterativamente para generar la decision y asegurar JSON valido.
-           Implementa Failover dinamico de Cuentas (Rotacion de Token).
+           Implementa Failover dinamico de Cuentas (Rotacion de Token y de Infraestructura LLM).
         """
         risk_summary = self._format_risk_summary(risk)
         last_error = ""
 
-        max_attempts = max(3, len(self._groq_keys) if self._active_provider == LLMProvider.GROQ else len(self._gemini_keys))
+        # Pool combinado de intentos (Groq Keys + Gemini Keys + Buffer)
+        max_attempts = len(self._groq_keys) + len(self._gemini_keys) + 2
 
         for attempt in range(max_attempts):
             try:
@@ -633,6 +643,9 @@ class AgentArbitro:
                 human_prompt = _USER_PROMPT_TEMPLATE
                 if last_error and "rate" not in last_error.lower() and "429" not in last_error:
                     human_prompt += f"\n\n[SISTEMA]: TU RESPUESTA ANTERIOR GENERO ESTE ERROR: {last_error}. CORRIGE TU FORMATO A JSON EXCLUSIVAMENTE VALIDO O PERDEREMOS DINERO."
+
+                if self._chain is None:
+                    raise RuntimeError("Cadena LLM no inicializada / Inactiva")
 
                 chain = (
                     ChatPromptTemplate.from_messages([
