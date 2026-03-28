@@ -2866,5 +2866,71 @@
     "confidence": 0.0,
     "reasoning": "Error parseo JSON y cuotas tras 3 reintentos y rotaciones: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kkzj2q7tejrbajtnpbzw98rw` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99708, Requested 878. Please try again in 8m26.304s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
     "position_size_pct": 0.0
+  },
+  "2025-03-31T13:00:00": {
+    "decision": "HOLD",
+    "confidence": 0.0,
+    "reasoning": "Error parseo JSON y cuotas tras 3 reintentos y rotaciones: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kkzj2q7tejrbajtnpbzw98rw` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99699, Requested 848. Please try again in 7m52.608s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+    "position_size_pct": 0.0
+  },
+  "2025-03-31T15:00:00": {
+    "decision": "HOLD",
+    "confidence": 0.0,
+    "reasoning": "Error parseo JSON y cuotas tras 3 reintentos y rotaciones: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kkzj2q7tejrbajtnpbzw98rw` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99690, Requested 903. Please try again in 8m32.352s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+    "position_size_pct": 0.0
+  },
+  "2025-04-01T15:00:00": {
+    "decision": "HOLD",
+    "confidence": 0.0,
+    "reasoning": "Error parseo JSON y cuotas tras 3 reintentos y rotaciones: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kkzj2q7tejrbajtnpbzw98rw` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99681, Requested 726. Please try again in 5m51.647999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+    "position_size_pct": 0.0
+  },
+  "2025-04-02T15:00:00": {
+    "decision": "HOLD",
+    "confidence": 0.0,
+    "reasoning": "Error parseo JSON y cuotas tras 3 reintentos y rotaciones: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kkzj2q7tejrbajtnpbzw98rw` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99672, Requested 724. Please try again in 5m42.144s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+    "position_size_pct": 0.0
+  },
+  "2025-04-02T23:00:00": {
+    "decision": "HOLD",
+    "confidence": 0.0,
+    "reasoning": "Error parseo JSON y cuotas tras 3 reintentos y rotaciones: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kkzj2q7tejrbajtnpbzw98rw` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99664, Requested 749. Please try again in 5m56.832s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+    "position_size_pct": 0.0
+  },
+  "2025-04-06T19:00:00": {
+    "decision": "HOLD",
+    "confidence": 0.0,
+    "reasoning": "Error parseo JSON y cuotas tras 3 reintentos y rotaciones: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kkzj2q7tejrbajtnpbzw98rw` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99655, Requested 766. Please try again in 6m3.744s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+    "position_size_pct": 0.0
+  },
+  "2025-04-06T21:00:00": {
+    "decision": "HOLD",
+    "confidence": 0.0,
+    "reasoning": "Error parseo JSON y cuotas tras 3 reintentos y rotaciones: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kkzj2q7tejrbajtnpbzw98rw` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99646, Requested 876. Please try again in 7m31.008s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+    "position_size_pct": 0.0
+  },
+  "2025-04-06T23:00:00": {
+    "decision": "BUY",
+    "confidence": 0.8,
+    "reasoning": "El agente alcista tiene una fuerza moderada a alta (7/10) y presenta varios puntos a favor, como el RSI en zona de sobreventa, volumen an\u00f3malo alcista y el precio cerca de la banda inferior de Bollinger, lo que sugiere una zona de soporte. Por otro lado, el agente bajista tiene una fuerza moderada (5/10) pero no presenta puntos de riesgo significativos. Adem\u00e1s, las m\u00e9tricas de riesgo del portafolio est\u00e1n en un nivel bajo, lo que permite tomar una posici\u00f3n de compra con un tama\u00f1o moderado.",
+    "position_size_pct": 10.0
+  },
+  "2025-04-07T07:00:00": {
+    "decision": "HOLD",
+    "confidence": 0.0,
+    "reasoning": "Error parseo JSON y cuotas tras 3 reintentos y rotaciones: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kmpt8s4efaeae5sw50b00byt` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99844, Requested 879. Please try again in 10m24.672s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+    "position_size_pct": 0.0
+  },
+  "2025-04-08T20:00:00": {
+    "decision": "HOLD",
+    "confidence": 0.0,
+    "reasoning": "Error parseo JSON y cuotas tras 3 reintentos y rotaciones: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kmpt8s4efaeae5sw50b00byt` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99833, Requested 881. Please try again in 10m16.896s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+    "position_size_pct": 0.0
+  },
+  "2025-04-09T00:00:00": {
+    "decision": "HOLD",
+    "confidence": 0.0,
+    "reasoning": "Error parseo JSON y cuotas tras 3 reintentos y rotaciones: Error code: 429 - {'error': {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kmpt8s4efaeae5sw50b00byt` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99827, Requested 881. Please try again in 10m11.712s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+    "position_size_pct": 0.0
   }
 }
