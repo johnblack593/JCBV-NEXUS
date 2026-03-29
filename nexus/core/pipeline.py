@@ -49,6 +49,7 @@ from .signal_engine import TechnicalSignalEngine
 from .risk_manager import QuantRiskManager
 from .ml_engine import MLEngine
 from .observability import NexusMetrics
+from nexus.reporting.telegram_reporter import TelegramReporter
 
 logger = logging.getLogger("nexus.pipeline")
 
@@ -184,6 +185,12 @@ class NexusPipeline:
         self.metrics = NexusMetrics(port=9090)
         self.metrics.start_server()
 
+        # ── Telegram: Institutional Voice ─────────────────────────────
+        self.telegram = TelegramReporter.get_instance()
+        await self.telegram.initialize()
+        if connected:
+            self.telegram.fire_startup(self.venue, balance)
+
     # ══════════════════════════════════════════════════════════════════
     #  Main Event Loop
     # ══════════════════════════════════════════════════════════════════
@@ -218,6 +225,7 @@ class NexusPipeline:
                 break
             except Exception as e:
                 logger.error(f"Pipeline tick error: {e}", exc_info=True)
+                self.telegram.fire_system_error(str(e), module="pipeline._tick")
                 await asyncio.sleep(5)
 
             # Loop interval: IQ = 60s (sniper), Binance = 10s (higher freq)
@@ -319,7 +327,23 @@ class NexusPipeline:
         )
 
         # ── Step 12: Execute (Layer 5) ───────────────────────────────
-        result = await self.execution_engine.execute(trade_signal)
+        # Telegram: Sniper Entry alert (fire-and-forget)
+        self.telegram.fire_sniper_entry(
+            asset=asset,
+            direction=direction.value,
+            size=size,
+            confidence=confidence,
+            venue=self.venue,
+            regime=regime.value,
+            reason=signal_result.get("reason", ""),
+        )
+
+        try:
+            result = await self.execution_engine.execute(trade_signal)
+        except Exception as exc:
+            logger.error(f"Execution failed: {exc}", exc_info=True)
+            self.telegram.fire_system_error(f"Execution failed: {exc}", module="execution_engine")
+            return
         latency = (time.perf_counter() - t_start) * 1000
 
         self._log_execution(result, trade_signal, latency)
@@ -337,6 +361,22 @@ class NexusPipeline:
             if result.payout > 0:
                 # IQ Option: log the trade return
                 self._returns_history.append(result.payout / 100.0)
+
+            # Telegram: Trade Result alert (fire-and-forget)
+            try:
+                current_balance = await self.execution_engine.get_balance()
+            except Exception:
+                current_balance = 0.0
+            outcome = "WIN" if result.payout > 0 else "LOSS"
+            self.telegram.fire_trade_result(
+                asset=result.asset,
+                direction=result.direction.value,
+                size=result.size,
+                payout_pct=result.payout,
+                new_balance=current_balance,
+                outcome=outcome,
+                venue=self.venue,
+            )
 
         # ── Step 14: Observability (Prometheus) ──────────────────────
         if self.metrics:
@@ -358,10 +398,10 @@ class NexusPipeline:
     #  Market Data Acquisition
     # ══════════════════════════════════════════════════════════════════
 
-    async def _get_market_data(self):
+    async def _get_market_data(self) -> Tuple[Optional[str], Any]:
         """
         Gets OHLCV data from the venue-specific source.
-        Returns (asset, DataFrame) or (None, None) on failure.
+        Returns (asset, DataFrame) or (None, empty DataFrame) on failure.
         """
         import pandas as pd
 
@@ -409,7 +449,7 @@ class NexusPipeline:
     #  Position Sizing (Dual-Mode)
     # ══════════════════════════════════════════════════════════════════
 
-    async def _calculate_size(self, confidence: float, df) -> float:
+    async def _calculate_size(self, confidence: float, df: Any) -> float:
         """
         Venue-aware position sizing.
 
@@ -588,6 +628,11 @@ class NexusPipeline:
         """Cierra todas las capas limpiamente."""
         self._running = False
         logger.info("🛑 NEXUS Pipeline — Shutting down...")
+
+        # Telegram: Shutdown broadcast (before disconnecting services)
+        stats = self.get_session_stats()
+        self.telegram.fire_shutdown(stats)
+        await asyncio.sleep(1)  # Grace period for Telegram dispatch
 
         if self.macro_agent:
             await self.macro_agent.stop()

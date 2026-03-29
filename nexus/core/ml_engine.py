@@ -223,13 +223,25 @@ class LSTMPredictor:
         X_train, X_val = X[:split], X[split:]
         y_train, y_val = y[:split], y[split:]
 
-        history = self.model.fit(  # type: ignore
-            X_train, y_train,
-            validation_data=(X_val, y_val),
-            epochs=self.epochs,
-            batch_size=self.batch_size,
-            verbose=0,
-        )
+        try:
+            history = self.model.fit(  # type: ignore
+                X_train, y_train,
+                validation_data=(X_val, y_val),
+                epochs=self.epochs,
+                batch_size=self.batch_size,
+                verbose=0,
+            )
+        except Exception as exc:
+            logger.error("LSTM training failed: %s", exc)
+            try:
+                from nexus.reporting.telegram_reporter import TelegramReporter
+                TelegramReporter.get_instance().fire_system_error(
+                    f"LSTM train error: {exc}", module="ml_engine.LSTM"
+                )
+            except Exception:
+                pass
+            self._trained = False
+            return {"loss": [], "val_loss": []}
 
         self._trained = True
         self._train_history = {

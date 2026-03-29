@@ -250,6 +250,14 @@ class MacroAgent:
                 f"🌐 MACRO REGIME CHANGE: {old_regime.value} → {new_regime.value} "
                 f"| F&G: {score} ({classification}) | {reasoning} | {elapsed:.0f}ms"
             )
+            # Telegram: Macro Shift alert (fire-and-forget)
+            try:
+                from nexus.reporting.telegram_reporter import TelegramReporter
+                TelegramReporter.get_instance().fire_macro_shift(
+                    old_regime.value, new_regime.value, reasoning
+                )
+            except Exception:
+                pass  # Telegram failure never blocks macro evaluation
         else:
             logger.info(
                 f"🌐 MacroAgent tick: {new_regime.value} "

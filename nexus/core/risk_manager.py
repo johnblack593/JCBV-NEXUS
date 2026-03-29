@@ -368,6 +368,15 @@ class QuantRiskManager:
             self.CIRCUIT_BREAKER_COOLDOWN,
         )
 
+        # Telegram: Circuit Breaker alert (fire-and-forget)
+        try:
+            from nexus.reporting.telegram_reporter import TelegramReporter
+            TelegramReporter.get_instance().fire_circuit_breaker(
+                current_drawdown, self.CIRCUIT_BREAKER_COOLDOWN // 3600
+            )
+        except Exception:
+            pass  # Telegram failure never blocks risk management
+
         return True
 
     def is_circuit_breaker_active(self) -> bool:
