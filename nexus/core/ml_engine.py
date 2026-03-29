@@ -132,7 +132,13 @@ class LSTMPredictor:
         logger.info("Modelo LSTM construido: %s", model.summary(print_fn=lambda x: None) or "OK")
 
     def prepare_data(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-        """Escala y genera secuencias (X, y) para entrenamiento."""
+        """
+        Genera secuencias (X, y) con escalado POR VENTANA (sin lookahead bias).
+
+        Cada ventana de lookback es escalada con su propio MinMaxScaler local,
+        evitando que datos futuros contaminen el entrenamiento.
+        El último scaler se guarda en self.scaler para inferencia.
+        """
         # Seleccionar features disponibles
         available_features = [f for f in self.features if f in df.columns]
         if not available_features:
@@ -149,26 +155,38 @@ class LSTMPredictor:
         data = np.column_stack([data, returns])
 
         # Volatilidad (rolling std de returns, ventana 20)
-        vol = pd.Series(returns).rolling(20, min_periods=1).std().values
+        vol = pd.Series(returns).rolling(20, min_periods=1).std().fillna(0.0).values
         data = np.column_stack([data, vol])
 
-        # Escalar
-        if _HAS_SKLEARN:
-            self.scaler = MinMaxScaler()
-            data = self.scaler.fit_transform(data)  # type: ignore
-        else:
-            # Normalizacion manual
-            data_min = data.min(axis=0)
-            data_max = data.max(axis=0)
-            data_range = np.maximum(data_max - data_min, 1e-8)
-            data = (data - data_min) / data_range
-
-        # Crear secuencias
+        # Crear secuencias con escalado LOCAL por ventana (walk-forward safe)
         X, y = [], []
         for i in range(self.lookback, len(data)):
-            X.append(data[i - self.lookback: i])
-            y.append(data[i, close_idx])  # Predecir close scaled
+            window = data[i - self.lookback: i].copy()
+            target_val = data[i, close_idx]
 
+            if _HAS_SKLEARN:
+                local_scaler = MinMaxScaler()
+                window_scaled = local_scaler.fit_transform(window)
+                # Escalar target usando min/max de LA VENTANA (no del futuro)
+                col_min = local_scaler.data_min_[close_idx]
+                col_range = local_scaler.data_range_[close_idx]
+                target_scaled = (target_val - col_min) / max(col_range, 1e-8)
+                # Guardar el último scaler para uso en inferencia
+                self.scaler = local_scaler
+            else:
+                w_min = window.min(axis=0)
+                w_max = window.max(axis=0)
+                w_range = np.maximum(w_max - w_min, 1e-8)
+                window_scaled = (window - w_min) / w_range
+                target_scaled = (target_val - w_min[close_idx]) / w_range[close_idx]
+
+            X.append(window_scaled)
+            y.append(target_scaled)
+
+        logger.info(
+            "prepare_data: %d secuencias generadas (walk-forward, sin lookahead bias)",
+            len(X),
+        )
         return np.array(X), np.array(y)
 
     def train(self, df: pd.DataFrame) -> Dict[str, List[float]]:

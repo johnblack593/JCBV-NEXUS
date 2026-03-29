@@ -15,6 +15,7 @@ Cada método incluye un bloque de validación assert al final del módulo.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -87,6 +88,7 @@ class QuantRiskManager:
     KELLY_MAX_FRACTION = 0.25           # Cap del Kelly fraccionado
     Z_SCORES = {0.95: 1.645, 0.99: 2.326}
     CIRCUIT_BREAKER_COOLDOWN = 86_400   # 24 horas en segundos
+    CB_STATE_FILE = "cb_state.json"     # Persistencia del circuit breaker
 
     def __init__(
         self,
@@ -101,6 +103,9 @@ class QuantRiskManager:
         self._open_positions: List[Dict[str, Any]] = []
         self._circuit_breaker_active: bool = False
         self._circuit_breaker_until: float = 0.0  # timestamp
+
+        # Restaurar estado del CB desde disco (sobrevive crashes)
+        self._load_cb_state()
 
     # ══════════════════════════════════════════════════════════════════
     #  MÉTODO 1: Kelly Criterion
@@ -225,7 +230,7 @@ class QuantRiskManager:
         return result
 
     # ══════════════════════════════════════════════════════════════════
-    #  MÉTODO 3: Value at Risk (VaR paramétrico)
+    #  MÉTODO 3: Value at Risk (VaR HISTÓRICO — No asume normalidad)
     # ══════════════════════════════════════════════════════════════════
 
     def value_at_risk(
@@ -234,10 +239,18 @@ class QuantRiskManager:
         confidence: float = 0.95,
     ) -> float:
         """
-        VaR paramétrico (distribución normal).
+        VaR HISTÓRICO (basado en percentiles reales).
 
-        Fórmula: VaR = μ − z·σ
-        donde z = 1.645 para 95%, z = 2.326 para 99%
+        A diferencia del VaR paramétrico (que asume distribución normal),
+        este método usa el percentil real de la cola izquierda de los
+        retornos, capturando correctamente fat tails y distribuciones
+        asimétricas típicas de mercados financieros.
+
+        Fórmula: VaR = -percentile(returns, alpha)
+        donde alpha = 1 - confidence (e.g. 5% para VaR95)
+
+        También calcula CVaR (Expected Shortfall) como el promedio
+        de todos los retornos peores que el VaR.
 
         Args:
             returns_list: Lista de retornos porcentuales
@@ -248,31 +261,25 @@ class QuantRiskManager:
         """
         if not returns_list:
             raise ValueError("returns_list no puede estar vacío")
+        if len(returns_list) < 30:
+            logger.warning("VaR histórico: solo %d muestras (mínimo recomendado: 30)", len(returns_list))
 
         returns_arr = np.array(returns_list, dtype=np.float64)
-        mu = float(np.mean(returns_arr))
-        sigma = float(np.std(returns_arr, ddof=1))  # Desviación estándar muestral
+        alpha = (1.0 - confidence) * 100  # e.g. 5.0 para 95%
 
-        z = self.Z_SCORES.get(confidence)
-        if z is None:
-            # Calcular z-score genérico
-            if _HAS_SCIPY:
-                z = scipy_stats.norm.ppf(confidence)
-            else:
-                raise ValueError(
-                    f"confidence={confidence} no soportado sin scipy. "
-                    f"Valores soportados: {list(self.Z_SCORES.keys())}"
-                )
+        # Percentil real de la cola izquierda
+        var_threshold = float(np.percentile(returns_arr, alpha))
 
-        # VaR = μ − z·σ  (negativo significa pérdida)
-        var_value = mu - z * sigma
+        # CVaR (Expected Shortfall): promedio de pérdidas peores que VaR
+        tail_losses = returns_arr[returns_arr <= var_threshold]
+        cvar = float(np.mean(tail_losses)) if len(tail_losses) > 0 else var_threshold
 
         # Retornar como valor positivo (porcentaje de capital en riesgo)
-        var_pct = abs(var_value) if var_value < 0 else 0.0
+        var_pct = abs(var_threshold) if var_threshold < 0 else 0.0
 
         logger.info(
-            "VaR(%.0f%%): μ=%.6f, σ=%.6f, z=%.3f → VaR=%.6f (%.4f%%)",
-            confidence * 100, mu, sigma, z, var_value, var_pct * 100,
+            "VaR_Hist(%.0f%%): threshold=%.6f, CVaR=%.6f, n=%d → VaR=%.4f%%",
+            confidence * 100, var_threshold, cvar, len(returns_arr), var_pct * 100,
         )
         return round(var_pct, 6)  # type: ignore
 
@@ -351,9 +358,11 @@ class QuantRiskManager:
         except OSError as exc:
             logger.error("Error escribiendo circuit breaker log: %s", exc)
 
-        # 3. Bloqueo ya está activo (self._circuit_breaker_active = True)
+        # 3. Persistir estado en disco (sobrevive crashes)
+        self._save_cb_state()
+
         logger.critical(
-            "CIRCUIT BREAKER: Nuevas órdenes bloqueadas por %d segundos",
+            "CIRCUIT BREAKER: Nuevas órdenes bloqueadas por %d segundos (estado persistido)",
             self.CIRCUIT_BREAKER_COOLDOWN,
         )
 
@@ -365,8 +374,60 @@ class QuantRiskManager:
             return False
         if time.time() >= self._circuit_breaker_until:
             self._circuit_breaker_active = False
+            self._clear_cb_state()
+            logger.info("Circuit breaker desactivado (cooldown expirado, estado limpiado)")
             return False
         return True
+
+    # ── Persistencia del Circuit Breaker en disco ─────────────────────
+
+    def _get_cb_state_path(self) -> Path:
+        return self._log_dir / self.CB_STATE_FILE
+
+    def _save_cb_state(self) -> None:
+        """Persiste el estado del CB en JSON para sobrevivir crashes."""
+        state = {
+            "is_active": self._circuit_breaker_active,
+            "until_timestamp": self._circuit_breaker_until,
+            "activated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            with open(self._get_cb_state_path(), "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2)
+            logger.info("CB state persistido en %s", self._get_cb_state_path())
+        except OSError as exc:
+            logger.error("Error persistiendo CB state: %s", exc)
+
+    def _load_cb_state(self) -> None:
+        """Restaura el estado del CB desde disco al iniciar."""
+        path = self._get_cb_state_path()
+        if not path.exists():
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            until = state.get("until_timestamp", 0)
+            if time.time() < until:
+                self._circuit_breaker_active = True
+                self._circuit_breaker_until = until
+                remaining = int(until - time.time())
+                logger.warning(
+                    "CB restaurado desde disco: activo por %d seg más",
+                    remaining,
+                )
+            else:
+                self._clear_cb_state()
+        except Exception as exc:
+            logger.error("Error cargando CB state: %s", exc)
+
+    def _clear_cb_state(self) -> None:
+        """Elimina el archivo de estado del CB."""
+        path = self._get_cb_state_path()
+        if path.exists():
+            try:
+                path.unlink()
+            except OSError:
+                pass
 
     # (Método correlation_check eliminado en favor de correlation_penalty)
 
@@ -655,25 +716,23 @@ def _run_validation() -> bool:
 
     # ── VALUE AT RISK ─────────────────────────────────────────────
 
-    print("\n--- Value at Risk (VaR parametrico) ---")
+    print("\n--- Value at Risk (VaR HISTÓRICO) ---")
 
-    # Test 1: retornos conocidos → verificar fórmula
+    # Test 1: retornos conocidos → verificar percentil real
     var_returns = [0.01, 0.02, -0.01, 0.005, -0.015, 0.03, -0.005, 0.01, -0.02, 0.015]
-    mu = np.mean(var_returns)
-    sigma = np.std(var_returns, ddof=1)
-    expected_var = abs(mu - 1.645 * sigma) if (mu - 1.645 * sigma) < 0 else 0
+    expected_var_hist = abs(float(np.percentile(var_returns, 5)))
     var1 = rm.value_at_risk(var_returns, confidence=0.95)
     check(
-        "VaR(95%) fórmula = |μ - 1.645·σ|",
-        abs(var1 - round(expected_var, 6)) < 1e-5,
-        f"Esperado {expected_var:.6f}, obtenido {var1}",
+        "VaR_Hist(95%) = |percentile(returns, 5%)|",
+        abs(var1 - round(expected_var_hist, 6)) < 1e-5,
+        f"Esperado {expected_var_hist:.6f}, obtenido {var1}",
     )
 
     # Test 2: retornos todos positivos → VaR debería ser 0 o muy bajo
     pos_returns = [0.01, 0.02, 0.015, 0.025, 0.01]
     var2 = rm.value_at_risk(pos_returns, confidence=0.95)
     check(
-        "VaR con retornos positivos = 0 (μ - z·σ > 0)",
+        "VaR_Hist con retornos positivos = 0",
         var2 == 0.0 or var2 < 0.01,
         f"VaR={var2}",
     )

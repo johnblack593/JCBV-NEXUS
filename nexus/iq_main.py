@@ -155,8 +155,8 @@ class HFTDaemon:
         if df.empty:
             return
             
-        # 3. Alpha V3 Check
-        eval_res = self.evaluate_alpha_v3_vectorized(df)
+        # 3. Alpha V3 Check (CPU-bound → offloaded al thread pool para no bloquear el event loop)
+        eval_res = await asyncio.to_thread(self.evaluate_alpha_v3_vectorized, df)
         composite = eval_res["composite"]
         signal = eval_res["signal"]
         

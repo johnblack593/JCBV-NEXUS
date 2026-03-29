@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from core.structured_logger import get_quant_logger
+from nexus.core.structured_logger import get_quant_logger
 
 logger = logging.getLogger("nexus.agent_arbitro")
 
@@ -231,7 +231,7 @@ class AgentArbitro:
         self._load_global_cache()
 
         # ── Multi-Key Accounts ──────────────────────────────────────────
-        from config.settings import GROQ_API_KEYS, GOOGLE_API_KEYS
+        from nexus.config.settings import GROQ_API_KEYS, GOOGLE_API_KEYS
         self._groq_keys = GROQ_API_KEYS
         self._gemini_keys = GOOGLE_API_KEYS
         self._groq_idx = 0
@@ -505,7 +505,22 @@ class AgentArbitro:
             self._log_debate(bull_state, bear_state, result)
             return result
 
-        # ── Intentar deliberacion con LLM (con failover) ──────────────
+        # ── BYPASS LLM para Binary/Turbo Mode (latencia < 1ms vs 2-4s) ──
+        # En opciones binarias (1-5 min), la latencia del LLM destruye el payout.
+        # Ruta directa por heurístico puro — LLM se reserva para Spot interdiario.
+        if self.trading_mode in ("binary_turbo", "binary"):
+            logger.info(
+                "⚡ Binary Mode: bypass LLM (latencia crítica). Heurístico directo."
+            )
+            result = self._deliberate_heuristic(
+                bull_strength, bear_strength, risk
+            )
+            result = self._apply_confidence_gate(result)
+            result = self._apply_risk_override(result, risk)
+            self._log_debate(bull_state, bear_state, result, provider="heuristic_binary", symbol=symbol)
+            return result
+
+        # ── Intentar deliberacion con LLM (con failover) ────────────── 
         used_provider = "heuristic"
         context_str = json.dumps(market_context or {}, indent=2)
 
