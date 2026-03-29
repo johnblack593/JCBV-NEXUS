@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   # ═══════════════════════════════════════════════════════════════
-  #  NEXUS HFT Core — Daemon de Trading Autónomo
+  #  NEXUS HFT Core — Daemon de Trading Autónomo v4.0
   # ═══════════════════════════════════════════════════════════════
   nexus-core:
     build: .
@@ -20,10 +20,14 @@ services:
     networks:
       - nexus-net
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+      questdb:
+        condition: service_started
 
   # ═══════════════════════════════════════════════════════════════
-  #  Redis — Estado compartido (Circuit Breaker, Session Lock)
+  #  Redis — Estado Atómico (Circuit Breaker, MACRO_REGIME, Locks)
+  #  Healthcheck estricto: 3 reintentos, 5s intervalo
   # ═══════════════════════════════════════════════════════════════
   redis:
     image: redis:7-alpine
@@ -35,7 +39,35 @@ services:
       - redis-data:/data
     networks:
       - nexus-net
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # ═══════════════════════════════════════════════════════════════
+  #  QuestDB — Data Lake Institucional (Ticks, AggTrades, L2)
+  #  PostgreSQL wire: 8812 | REST/Web Console: 9000 | ILP: 9009
+  # ═══════════════════════════════════════════════════════════════
+  questdb:
+    image: questdb/questdb:8.2.1
+    container_name: nexus-questdb
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # Web Console + REST API
+      - "8812:8812"   # PostgreSQL wire protocol
+      - "9009:9009"   # InfluxDB Line Protocol (ILP) ingestion
+    volumes:
+      - questdb-data:/var/lib/questdb
+    environment:
+      - QDB_CAIRO_COMMIT_LAG=1000
+      - QDB_SHARED_WORKER_COUNT=2
+      - QDB_PG_USER=${QUESTDB_PG_USER:-admin}
+      - QDB_PG_PASSWORD=${QUESTDB_PG_PASSWORD:-quest}
+    networks:
+      - nexus-net
 
   # ═══════════════════════════════════════════════════════════════
   #  Prometheus — Recolección de Métricas
@@ -53,7 +85,8 @@ services:
       - nexus-net
 
   # ═══════════════════════════════════════════════════════════════
-  #  Grafana — Dashboard de Observabilidad
+  #  Grafana — Dashboard de Observabilidad Institucional
+  #  Credenciales movidas a .env (Zero Hardcode)
   # ═══════════════════════════════════════════════════════════════
   grafana:
     image: grafana/grafana:latest
@@ -62,8 +95,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=nexus
-      - GF_SECURITY_ADMIN_PASSWORD=nexus2026
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-nexus}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-changeme}
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/nexus.json
     volumes:
       - grafana-data:/var/lib/grafana
@@ -71,6 +104,7 @@ services:
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
       - prometheus
+      - questdb
     networks:
       - nexus-net
 
@@ -78,6 +112,7 @@ volumes:
   redis-data:
   prometheus-data:
   grafana-data:
+  questdb-data:
 
 networks:
   nexus-net:

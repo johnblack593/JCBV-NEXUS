@@ -94,17 +94,19 @@ class QuantRiskManager:
         self,
         log_dir: str = "logs",
         execution_engine: Any = None,
+        redis_client: Any = None,
     ) -> None:
         self._log_dir = Path(log_dir)
         self._log_dir.mkdir(parents=True, exist_ok=True)
 
         self._execution_engine = execution_engine
+        self._redis = redis_client  # v4.0: Redis for atomic CB state
         self._portfolio_value: float = 0.0
         self._open_positions: List[Dict[str, Any]] = []
         self._circuit_breaker_active: bool = False
         self._circuit_breaker_until: float = 0.0  # timestamp
 
-        # Restaurar estado del CB desde disco (sobrevive crashes)
+        # Restaurar estado del CB: Redis (cluster-wide) → disco (local fallback)
         self._load_cb_state()
 
     # ══════════════════════════════════════════════════════════════════
@@ -379,27 +381,68 @@ class QuantRiskManager:
             return False
         return True
 
-    # ── Persistencia del Circuit Breaker en disco ─────────────────────
+    # ── Persistencia Dual del Circuit Breaker (Redis + Disco) ──────────
+
+    _REDIS_CB_KEY = "NEXUS:CIRCUIT_BREAKER"
+    _REDIS_CB_UNTIL_KEY = "NEXUS:CIRCUIT_BREAKER_UNTIL"
 
     def _get_cb_state_path(self) -> Path:
         return self._log_dir / self.CB_STATE_FILE
 
     def _save_cb_state(self) -> None:
-        """Persiste el estado del CB en JSON para sobrevivir crashes."""
+        """Persiste el estado del CB en Redis (atómico) + JSON (fallback local)."""
         state = {
             "is_active": self._circuit_breaker_active,
             "until_timestamp": self._circuit_breaker_until,
             "activated_at": datetime.now(timezone.utc).isoformat(),
         }
+
+        # 1. Redis (atómico, compartido entre instancias)
+        if self._redis:
+            try:
+                ttl = max(1, int(self._circuit_breaker_until - time.time()))
+                pipe = self._redis.pipeline()
+                pipe.set(self._REDIS_CB_KEY, "1", ex=ttl)
+                pipe.set(self._REDIS_CB_UNTIL_KEY, str(self._circuit_breaker_until), ex=ttl)
+                pipe.execute()
+                logger.info("CB state persistido en Redis (TTL=%ds)", ttl)
+            except Exception as exc:
+                logger.warning("Redis CB write failed: %s (falling back to disk)", exc)
+
+        # 2. Disco (local fallback — sobrevive Redis outages)
         try:
             with open(self._get_cb_state_path(), "w", encoding="utf-8") as f:
                 json.dump(state, f, indent=2)
-            logger.info("CB state persistido en %s", self._get_cb_state_path())
         except OSError as exc:
-            logger.error("Error persistiendo CB state: %s", exc)
+            logger.error("Error persistiendo CB state en disco: %s", exc)
 
     def _load_cb_state(self) -> None:
-        """Restaura el estado del CB desde disco al iniciar."""
+        """Restaura el estado del CB: Redis (cluster-wide) → disco (local fallback)."""
+        loaded = False
+
+        # 1. Intentar Redis primero (fuente de verdad para múltiples instancias)
+        if self._redis:
+            try:
+                raw_until = self._redis.get(self._REDIS_CB_UNTIL_KEY)
+                if raw_until:
+                    until = float(raw_until.decode("utf-8") if isinstance(raw_until, bytes) else raw_until)
+                    if time.time() < until:
+                        self._circuit_breaker_active = True
+                        self._circuit_breaker_until = until
+                        remaining = int(until - time.time())
+                        logger.warning(
+                            "CB restaurado desde Redis: activo por %d seg más", remaining
+                        )
+                        loaded = True
+                    else:
+                        self._redis.delete(self._REDIS_CB_KEY, self._REDIS_CB_UNTIL_KEY)
+            except Exception as exc:
+                logger.debug("Redis CB read failed: %s", exc)
+
+        if loaded:
+            return
+
+        # 2. Fallback a disco
         path = self._get_cb_state_path()
         if not path.exists():
             return
@@ -412,8 +455,7 @@ class QuantRiskManager:
                 self._circuit_breaker_until = until
                 remaining = int(until - time.time())
                 logger.warning(
-                    "CB restaurado desde disco: activo por %d seg más",
-                    remaining,
+                    "CB restaurado desde disco: activo por %d seg más", remaining
                 )
             else:
                 self._clear_cb_state()
@@ -421,7 +463,14 @@ class QuantRiskManager:
             logger.error("Error cargando CB state: %s", exc)
 
     def _clear_cb_state(self) -> None:
-        """Elimina el archivo de estado del CB."""
+        """Elimina el estado del CB de Redis y disco."""
+        # Redis
+        if self._redis:
+            try:
+                self._redis.delete(self._REDIS_CB_KEY, self._REDIS_CB_UNTIL_KEY)
+            except Exception:
+                pass
+        # Disco
         path = self._get_cb_state_path()
         if path.exists():
             try:

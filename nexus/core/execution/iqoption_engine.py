@@ -1,0 +1,240 @@
+"""
+NEXUS v4.0 — IQ Option Execution Engine (Layer 5: Concrete)
+============================================================
+Implementación concreta del AbstractExecutionEngine para IQ Option.
+Modo "Trojan Horse": Sniper Mode, Flat Sizing $1, Binary Turbo 1m.
+
+Hereda de AbstractExecutionEngine y adapta la lógica existente de
+IQOptionManager + IQOptionExecutionEngine (v3) al contrato unificado.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import time
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+
+import pandas as pd
+from dotenv import load_dotenv
+
+from .base import (
+    AbstractExecutionEngine,
+    ExecutionStatus,
+    SignalDirection,
+    TradeResult,
+    TradeSignal,
+    VenueType,
+)
+
+logger = logging.getLogger("nexus.execution.iqoption")
+
+# Dependencia comunitaria: The unofficial IQ Option wrapper
+try:
+    from iqoptionapi.stable_api import IQ_Option
+except ImportError:
+    IQ_Option = None
+    logger.warning("iqoptionapi no instalado. Ejecución IQ desactivada.")
+
+
+class IQOptionExecutionEngine(AbstractExecutionEngine):
+    """
+    Motor de ejecución para IQ Option Binary/Turbo Options.
+    
+    Responsabilidades:
+        - Conexión WebSocket vía iqoptionapi
+        - Ejecución CALL/PUT con validación de payout mínimo
+        - Datos históricos OHLCV con paginación profunda
+        - Balance PRACTICE/REAL según config
+    """
+
+    def __init__(self) -> None:
+        load_dotenv()
+        self._email = os.getenv("IQ_OPTION_EMAIL", "")
+        self._password = os.getenv("IQ_OPTION_PASSWORD", "")
+        self._account_type = os.getenv("IQ_OPTION_ACCOUNT_TYPE", "PRACTICE").upper()
+        self._min_payout = int(os.getenv("IQ_MIN_PAYOUT", "80"))
+
+        self._api: Optional[IQ_Option] = None
+        self._connected = False
+        self._lock = asyncio.Lock()
+
+    # ── AbstractExecutionEngine Contract ──────────────────────────
+
+    @property
+    def venue(self) -> VenueType:
+        return VenueType.IQ_OPTION
+
+    @property
+    def is_connected(self) -> bool:
+        return self._connected and self._api is not None
+
+    async def connect(self) -> bool:
+        if self._connected and self._api and self._api.check_connect():
+            return True
+
+        if not IQ_Option:
+            logger.error("iqoptionapi no instalado.")
+            return False
+
+        async with self._lock:
+            # Double-check inside lock
+            if self._connected and self._api and self._api.check_connect():
+                return True
+
+            logger.info(f"Conectando a IQ Option con {self._email}...")
+            self._api = IQ_Option(self._email, self._password)
+
+            check, reason = await asyncio.to_thread(self._api.connect)
+
+            if check:
+                self._connected = True
+                balance_mode = "PRACTICE" if self._account_type == "PRACTICE" else "REAL"
+                await asyncio.to_thread(self._api.change_balance, balance_mode)
+                logger.info(f"✅ IQ Option conectado [{balance_mode}]")
+                return True
+            else:
+                logger.error(f"❌ Fallo IQ Option: {reason}")
+                if reason == '2FA':
+                    logger.critical("2FA ACTIVADO — Enviar código SMS requerido.")
+                return False
+
+    async def disconnect(self) -> None:
+        if self._api:
+            # iqoptionapi no tiene un close() limpio, pero limpiamos estado
+            self._connected = False
+            self._api = None
+            logger.info("IQ Option desconectado.")
+
+    async def get_balance(self) -> float:
+        if not await self.connect():
+            return 0.0
+        return await asyncio.to_thread(self._api.get_balance)
+
+    async def get_payout(self, asset: str, option_type: str = "turbo") -> float:
+        """Retorna el payout % activo del activo."""
+        if not await self.connect():
+            return 0.0
+
+        payouts = await asyncio.to_thread(self._api.get_all_profit)
+        try:
+            val = payouts.get(asset, {}).get(option_type, 0)
+            if 0 < val < 1.0:
+                return float(val * 100)
+            return float(val * 100 if val < 10 else val)
+        except Exception:
+            return 0.0
+
+    async def execute(self, signal: TradeSignal) -> TradeResult:
+        """
+        Ejecuta una orden CALL/PUT en IQ Option Turbo.
+        Valida payout mínimo antes de disparar.
+        """
+        t_start = time.perf_counter()
+
+        if not await self.connect():
+            return TradeResult(
+                order_id="N/A", venue=self.venue, asset=signal.asset,
+                direction=signal.direction, status=ExecutionStatus.ERROR,
+                size=signal.size, executed_price=0.0,
+                latency_ms=(time.perf_counter() - t_start) * 1000,
+            )
+
+        # Map direction to IQ action
+        action = "call" if signal.direction in (SignalDirection.CALL, SignalDirection.BUY) else "put"
+
+        # Validate payout
+        payout = await self.get_payout(signal.asset)
+        if payout < self._min_payout:
+            logger.warning(
+                f"⚠️ Payout {payout}% < {self._min_payout}% para {signal.asset}. REJECTED."
+            )
+            return TradeResult(
+                order_id="N/A", venue=self.venue, asset=signal.asset,
+                direction=signal.direction, status=ExecutionStatus.REJECTED,
+                size=signal.size, executed_price=0.0, payout=payout,
+                latency_ms=(time.perf_counter() - t_start) * 1000,
+            )
+
+        # Fire order
+        asset_clean = signal.asset.replace("-op", "")
+        check, id_req = await asyncio.to_thread(
+            self._api.buy, signal.size, asset_clean, action, signal.expiration_minutes
+        )
+
+        latency = (time.perf_counter() - t_start) * 1000
+
+        if check:
+            logger.info(
+                f"🎯 SNIPER ENTRY | IQ_OPTION | {signal.asset} | {action.upper()} "
+                f"| ${signal.size} | Payout: {payout}% | Latency: {latency:.1f}ms"
+            )
+            return TradeResult(
+                order_id=str(id_req), venue=self.venue, asset=signal.asset,
+                direction=signal.direction, status=ExecutionStatus.FILLED,
+                size=signal.size, executed_price=0.0, payout=payout,
+                latency_ms=latency,
+            )
+        else:
+            logger.error(f"❌ Orden IQ fallida: {id_req}")
+            return TradeResult(
+                order_id="N/A", venue=self.venue, asset=signal.asset,
+                direction=signal.direction, status=ExecutionStatus.ERROR,
+                size=signal.size, executed_price=0.0, payout=payout,
+                latency_ms=latency,
+            )
+
+    # ── Data Methods (IQ-specific) ────────────────────────────────
+
+    _TF_MAP = {
+        "1m": 60, "2m": 120, "3m": 180, "5m": 300,
+        "15m": 900, "30m": 1800, "1h": 3600,
+    }
+
+    async def get_historical_data(
+        self, asset: str, tf: str, max_bars: int = 1000
+    ) -> pd.DataFrame:
+        """Descarga OHLCV histórico con paginación profunda."""
+        if not await self.connect():
+            return pd.DataFrame()
+
+        size = self._TF_MAP.get(tf, 60)
+        end_from_time = int(time.time())
+        all_candles = []
+        remaining = max_bars
+
+        while remaining > 0:
+            batch_size = min(remaining, 1000)
+            candles = await asyncio.to_thread(
+                self._api.get_candles, asset, size, batch_size, end_from_time
+            )
+            if not candles:
+                break
+
+            all_candles.extend(reversed(candles))
+            oldest_time = candles[0]['from']
+            end_from_time = oldest_time - 1
+            remaining -= len(candles)
+
+            if len(candles) < (batch_size * 0.5):
+                break
+            await asyncio.sleep(0.5)
+
+        if not all_candles:
+            return pd.DataFrame()
+
+        all_candles.reverse()
+        df = pd.DataFrame(all_candles)
+        df['open_time'] = pd.to_datetime(df['from'], unit='s', utc=True)
+        df['close_time'] = pd.to_datetime(df['to'], unit='s', utc=True)
+        df.rename(columns={'min': 'low', 'max': 'high'}, inplace=True)
+        df = df.drop_duplicates(subset=['open_time'])
+        df = df.sort_values(by="open_time").reset_index(drop=True)
+        df = df[['open_time', 'open', 'high', 'low', 'close', 'volume', 'close_time']]
+        for col in ['open', 'high', 'low', 'close', 'volume']:
+            df[col] = df[col].astype(float)
+
+        logger.info(f"✅ {len(df)} velas descargadas para {asset} ({tf})")
+        return df
