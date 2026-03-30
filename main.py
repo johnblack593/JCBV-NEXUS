@@ -251,18 +251,44 @@ def main() -> None:
     print("  v4.0 Institutional Grade — HFT Pipeline")
     print("=" * 60 + "\n")
 
-    # Pre-flight
-    if not preflight_checks():
-        sys.exit(1)
+    import argparse
+    parser = argparse.ArgumentParser(description="NEXUS v4.0 Omni-Channel Commander")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # Launch
-    try:
-        asyncio.run(run())
-    except KeyboardInterrupt:
-        print("\n🛑 NEXUS terminated by user (Ctrl+C).")
-    except Exception as exc:
-        print(f"\n💀 FATAL: {exc}")
-        sys.exit(1)
+    # Command: run
+    parser_run = subparsers.add_parser("run", help="Lanza el Pipeline asíncrono normal")
+
+    # Command: test
+    parser_test = subparsers.add_parser("test", help="Lanza el framework de pruebas")
+    parser_test.add_argument("--suite", type=str, required=True, help="Nombre de la suite de pruebas")
+
+    # Command: calibrate
+    parser_cal = subparsers.add_parser("calibrate", help="Lanza la calibración de un activo")
+    parser_cal.add_argument("--asset", type=str, required=True, help="Nombre del activo a calibrar")
+
+    args = parser.parse_args()
+
+    # Default to run if no command is provided
+    if args.command is None or args.command == "run":
+        if not preflight_checks():
+            sys.exit(1)
+        try:
+            asyncio.run(run())
+        except KeyboardInterrupt:
+            print("\n🛑 NEXUS terminated by user (Ctrl+C).")
+        except Exception as exc:
+            print(f"\n💀 FATAL: {exc}")
+            sys.exit(1)
+            
+    elif args.command == "test":
+        print(f"🔧 Ejecutando suite de test: {args.suite}")
+        # To be implemented with pytest or specific test runner
+        sys.exit(0)
+        
+    elif args.command == "calibrate":
+        from nexus.scripts.auto_calibrate import calibrate_asset
+        print(f"📈 Ejecutando calibración WFO para activo: {args.asset}")
+        asyncio.run(calibrate_asset(args.asset))
 
 
 if __name__ == "__main__":

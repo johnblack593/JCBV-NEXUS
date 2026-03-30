@@ -236,6 +236,37 @@ class NexusPipeline:
         """Single pipeline tick — evalúa una oportunidad de trading."""
         t_start = time.perf_counter()
 
+        # ── Step 0: PANIC MODE (Kill Switch from OCP Dashboard) ──────
+        if self.redis_client:
+            try:
+                panic = self.redis_client.get("NEXUS:PANIC_MODE")
+                if panic and panic in (b"1", "1"):
+                    logger.warning("🚨 PANIC HALT ACTIVE — All trading suspended via OCP.")
+                    return
+            except Exception:
+                pass  # Redis offline — continue without panic check
+
+        # ── Step 0b: Hot-Reload Config from Redis (OCP Overrides) ────
+        if self.redis_client:
+            try:
+                _prefix = "NEXUS:SETTINGS:"
+                overrides = {
+                    "max_daily_trades": self.redis_client.get(f"{_prefix}max_daily_trades"),
+                    "base_size": self.redis_client.get(f"{_prefix}base_size"),
+                    "min_confidence": self.redis_client.get(f"{_prefix}min_confidence"),
+                    "cooldown_between_trades_s": self.redis_client.get(f"{_prefix}cooldown_between_trades_s"),
+                    "min_payout": self.redis_client.get(f"{_prefix}min_payout"),
+                }
+                for key, val in overrides.items():
+                    if val is not None:
+                        decoded = val.decode() if isinstance(val, bytes) else val
+                        if key in ("max_daily_trades", "cooldown_between_trades_s", "min_payout"):
+                            self._config[key] = int(decoded)
+                        else:
+                            self._config[key] = float(decoded)
+            except Exception:
+                pass  # Redis offline — use cached config
+
         # ── Step 1: Check Macro Regime (Layer 2) ─────────────────────
         regime = await self.get_macro_regime()
 
@@ -268,7 +299,24 @@ class NexusPipeline:
         if df is None or df.empty or len(df) < 30:
             return  # Insuficient data
 
-        # ── Step 6: Generate Signal (Layer 3) ────────────────────────
+        # ── Step 6: AI Mode — Dynamic Parameter Injection ─────────────
+        # If AI_MODE == 1, read regime-optimized params from Redis
+        # and inject them into the signal engine before signal generation.
+        if self.redis_client and self.signal_engine:
+            try:
+                ai_mode = self.redis_client.get("NEXUS:AI_MODE")
+                if ai_mode and ai_mode in (b"1", "1"):
+                    opt_key = f"NEXUS:OPT:{asset}:{regime.value}"
+                    opt_raw = self.redis_client.get(opt_key)
+                    if opt_raw:
+                        import json as _json
+                        opt_decoded = opt_raw.decode() if isinstance(opt_raw, bytes) else opt_raw
+                        opt_params = _json.loads(opt_decoded)
+                        self.signal_engine.apply_overrides(opt_params)
+            except Exception:
+                pass  # AI Mode degradation — use current params
+
+        # ── Step 6b: Generate Signal (Layer 3) ────────────────────────
         signal_result = self.signal_engine.generate_signal(df)
         signal_dir = signal_result.get("signal", "HOLD")
         confidence = signal_result.get("confidence", 0.0)

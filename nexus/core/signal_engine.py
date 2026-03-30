@@ -594,6 +594,66 @@ class TechnicalSignalEngine:
 
         self._min_consensus = min_consensus
 
+    # ── AI Mode: Dynamic Parameter Injection ──────────────────────────
+
+    def apply_overrides(self, overrides: Dict[str, Any]) -> None:
+        """
+        Hot-inject optimized parameters from Redis (AI Mode / WFO calibration).
+        Called by pipeline._tick() when NEXUS:AI_MODE == 1.
+
+        Supported override keys:
+            rsi_period:    int   (default 14 spot / 7 binary)
+            bb_period:     int   (default 20)
+            bb_dev:        float (default 2.0)
+            trigger:       float (NexusAlpha TRIGGER threshold, binary only)
+            min_consensus: int   (spot only, 1-5)
+
+        Only provided keys are applied; missing keys keep current values.
+        """
+        if not overrides:
+            return
+
+        changed: List[str] = []
+
+        # RSI period override
+        rsi_p = overrides.get("rsi_period")
+        if rsi_p is not None:
+            rsi_p = int(rsi_p)
+            self.rsi = RSICalculator(period=rsi_p)
+            changed.append(f"RSI={rsi_p}")
+
+        # Bollinger overrides
+        bb_p = overrides.get("bb_period")
+        bb_d = overrides.get("bb_dev")
+        if bb_p is not None or bb_d is not None:
+            new_p = int(bb_p) if bb_p is not None else self.bollinger.period
+            new_d = float(bb_d) if bb_d is not None else self.bollinger.std_dev
+            self.bollinger = BollingerCalculator(period=new_p, std_dev=new_d)
+            changed.append(f"BB({new_p},{new_d})")
+
+        # NexusAlpha (binary mode) overrides
+        if self.mode == "binary" and hasattr(self, "alpha"):
+            alpha_rsi = overrides.get("rsi_period")
+            alpha_bb_p = overrides.get("bb_period")
+            alpha_bb_d = overrides.get("bb_dev")
+            if any(v is not None for v in [alpha_rsi, alpha_bb_p, alpha_bb_d]):
+                new_rsi = int(alpha_rsi) if alpha_rsi is not None else self.alpha.rsi_period
+                new_bbp = int(alpha_bb_p) if alpha_bb_p is not None else self.alpha.bb_period
+                new_bbd = float(alpha_bb_d) if alpha_bb_d is not None else self.alpha.bb_dev
+                self.alpha = NexusAlphaOscillatorCalculator(
+                    bb_period=new_bbp, bb_dev=new_bbd, rsi_period=new_rsi
+                )
+                changed.append(f"Alpha(RSI={new_rsi},BB={new_bbp}/{new_bbd})")
+
+        # Min consensus (spot mode)
+        mc = overrides.get("min_consensus")
+        if mc is not None and 1 <= int(mc) <= 5:
+            self._min_consensus = int(mc)
+            changed.append(f"Consensus={mc}")
+
+        if changed:
+            logger.info("🧠 AI Mode overrides applied: %s", ", ".join(changed))
+
     # ── Método principal ──────────────────────────────────────────────
 
     def generate_signal(self, df: pd.DataFrame) -> Dict[str, Any]:
