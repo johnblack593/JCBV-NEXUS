@@ -9,9 +9,8 @@
 python-binance>=1.0.19
 ccxt>=4.4.56
 websockets>=14.1
-# NOTE: iqoptionapi is installed from GitHub (not on PyPI >=7.x)
-# Installed separately in Dockerfile via:
-#   pip install git+https://github.com/nicekdev/iqoptionapi.git
+# iqoptionapi — already installed in .venv/site-packages
+# git+https://github.com/Lu-An-Da/iqoptionapi.git
 
 # Machine Learning & Deep Learning (CPU-ONLY — no NVIDIA/CUDA bloat)
 tensorflow-cpu>=2.18.0

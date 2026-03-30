@@ -26,12 +26,7 @@ COPY nexus/requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-# 3. Install iqoptionapi from GitHub (not available on PyPI >=7.x)
-#    Non-fatal: if repo is down, IQ Option execution will be disabled gracefully
-RUN pip install --no-cache-dir git+https://github.com/nicekdev/iqoptionapi.git || \
-    echo "⚠️ iqoptionapi install failed — IQ Option execution disabled"
-
-# 4. Copy source code and v4.0 entrypoint
+# 3. Copy source code and v4.0 entrypoint
 COPY main.py .
 COPY nexus/ ./nexus/
 

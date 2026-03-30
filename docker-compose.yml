@@ -108,6 +108,24 @@ services:
     networks:
       - nexus-net
 
+  # ═══════════════════════════════════════════════════════════════
+  #  NEXUS Commander — Operational Control Panel SPA (Vite/React)
+  #  Port 3001 to avoid Grafana conflicts.
+  # ═══════════════════════════════════════════════════════════════
+  nexus-commander:
+    build:
+      context: ./nexus-commander
+      dockerfile: Dockerfile
+    container_name: nexus-commander-ui
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    depends_on:
+      - nexus-core
+    networks:
+      - nexus-net
+
+
 volumes:
   redis-data:
   prometheus-data:

@@ -4,14 +4,16 @@ NEXUS v4.0 — Operational Control Panel (OCP) Backend
 Pure async REST API + WebSocket telemetry server.
 
 NO HTML rendering. NO Jinja2. NO static files.
-This is a headless API designed to feed a future SPA (React/Svelte).
+This is a headless API designed to feed the NEXUS Commander SPA.
 
 Architecture:
     Auth:       JWT (HS256) via POST /login
     State:      Redis (MACRO_REGIME, CIRCUIT_BREAKER, PANIC_MODE, AI_MODE)
     Trades:     QuestDB (PG wire on port 8812)
     Control:    Hot-Reload risk params + Kill Switch via Redis writes
-    Telemetry:  WebSocket /ws/telemetry (live state broadcast)
+    Telemetry:  WebSocket /ws/telemetry   (live state broadcast)
+    Prices:     WebSocket /ws/prices      (OHLCV tick stream)
+    Logs:       WebSocket /ws/logs        (live log tail)
 
 Launch:
     uvicorn nexus.dashboard.app:app --host 0.0.0.0 --port 8000
@@ -26,9 +28,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
+import random
 import time
+from collections import deque
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import jwt
@@ -74,6 +80,11 @@ _RK_CIRCUIT_BREAKER = "NEXUS:CIRCUIT_BREAKER_ACTIVE"
 _RK_PANIC_MODE = "NEXUS:PANIC_MODE"
 _RK_AI_MODE = "NEXUS:AI_MODE"
 _RK_SETTINGS_PREFIX = "NEXUS:SETTINGS:"
+_RK_EXECUTION_VENUE = "NEXUS:EXECUTION_VENUE"
+_RK_ACCOUNT_TYPE = "NEXUS:ACCOUNT_TYPE"
+
+# Log file path (shared with main.py)
+_LOG_FILE = Path("logs/nexus_session.log")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -198,6 +209,8 @@ class StateResponse(BaseModel):
     circuit_breaker_active: bool
     panic_mode: bool
     ai_mode: bool
+    execution_venue: str
+    account_type: str
     timestamp: str
 
 
@@ -211,6 +224,15 @@ class RiskSettingsRequest(BaseModel):
 
 class AIModeRequest(BaseModel):
     enabled: bool
+
+
+class VenueRequest(BaseModel):
+    venue: str  # "IQ_OPTION" | "BINANCE"
+
+
+class AccountTypeRequest(BaseModel):
+    account_type: str  # "PRACTICE" | "REAL"
+    confirm: bool = False  # Double-confirm guard for REAL
 
 
 class TradeRecord(BaseModel):
@@ -244,9 +266,9 @@ async def read_root() -> Dict[str, Any]:
     return {
         "app": "NEXUS v4.0 Operational Control Panel (OCP)",
         "status": "online",
-        "message": "Welcome to the NEXUS Headless API. Please use a client to authenticate or visit /docs.",
+        "message": "Headless API. Connect via NEXUS Commander SPA or visit /docs.",
         "docs_url": "/docs",
-        "health_check": "/health"
+        "health_check": "/health",
     }
 
 
@@ -278,13 +300,15 @@ async def login(form: OAuth2PasswordRequestForm = Depends()) -> TokenResponse:
 async def get_state(user: str = Depends(get_current_user)) -> StateResponse:
     """
     Read live pipeline state from Redis.
-    Returns MACRO_REGIME, Circuit Breaker, Panic Mode, and AI Mode.
+    Returns MACRO_REGIME, Circuit Breaker, Panic Mode, AI Mode, Venue, Account.
     """
     return StateResponse(
         macro_regime=_redis_safe_get(_RK_MACRO_REGIME, "GREEN"),
         circuit_breaker_active=_redis_safe_get(_RK_CIRCUIT_BREAKER, "0") == "1",
         panic_mode=_redis_safe_get(_RK_PANIC_MODE, "0") == "1",
         ai_mode=_redis_safe_get(_RK_AI_MODE, "0") == "1",
+        execution_venue=_redis_safe_get(_RK_EXECUTION_VENUE, os.getenv("EXECUTION_VENUE", "IQ_OPTION")),
+        account_type=_redis_safe_get(_RK_ACCOUNT_TYPE, os.getenv("IQ_OPTION_ACCOUNT_TYPE", "PRACTICE")),
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
@@ -452,6 +476,88 @@ async def toggle_ai_mode(
 
 
 # ══════════════════════════════════════════════════════════════════════
+#  ENDPOINT: POST /settings/venue
+# ══════════════════════════════════════════════════════════════════════
+
+@app.post("/settings/venue", tags=["Control Panel"])
+async def switch_venue(
+    req: VenueRequest,
+    user: str = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Switch execution venue between IQ_OPTION and BINANCE.
+    Pipeline reads NEXUS:EXECUTION_VENUE from Redis on every tick.
+    """
+    venue = req.venue.upper().strip()
+    if venue not in ("IQ_OPTION", "BINANCE"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid venue '{venue}'. Must be 'IQ_OPTION' or 'BINANCE'.",
+        )
+
+    success = _redis_safe_set(_RK_EXECUTION_VENUE, venue)
+    logger.info(f"Execution venue changed to {venue} by user={user}")
+
+    return {
+        "status": "ok" if success else "redis_offline",
+        "execution_venue": venue,
+        "user": user,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  ENDPOINT: POST /settings/account-type
+# ══════════════════════════════════════════════════════════════════════
+
+@app.post("/settings/account-type", tags=["Control Panel"])
+async def switch_account_type(
+    req: AccountTypeRequest,
+    user: str = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Switch account type between PRACTICE (demo) and REAL.
+
+    ⚠️ CRITICAL: Switching to REAL requires `confirm: true` in the request body.
+    This is a safety guard — real money is at stake.
+    """
+    acct = req.account_type.upper().strip()
+    if acct not in ("PRACTICE", "REAL"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid account type '{acct}'. Must be 'PRACTICE' or 'REAL'.",
+        )
+
+    # Double-confirm guard for REAL trading
+    if acct == "REAL" and not req.confirm:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Switching to REAL requires 'confirm: true'. This will use real money.",
+        )
+
+    success = _redis_safe_set(_RK_ACCOUNT_TYPE, acct)
+    logger.info(f"Account type changed to {acct} by user={user}")
+
+    # Telegram alert for REAL mode activation
+    if acct == "REAL":
+        try:
+            from nexus.reporting.telegram_reporter import TelegramReporter
+            TelegramReporter.get_instance().fire_system_error(
+                f"⚠️ REAL MONEY trading activated via OCP by {user}",
+                module="dashboard.account",
+            )
+        except Exception:
+            pass
+
+    return {
+        "status": "ok" if success else "redis_offline",
+        "account_type": acct,
+        "user": user,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════
 #  ENDPOINT: POST /panic (THE NUCLEAR BUTTON)
 # ══════════════════════════════════════════════════════════════════════
 
@@ -514,10 +620,17 @@ async def telemetry_ws(ws: WebSocket) -> None:
     try:
         while True:
             state = {
+                "type": "telemetry",
                 "macro_regime": _redis_safe_get(_RK_MACRO_REGIME, "GREEN"),
                 "circuit_breaker": _redis_safe_get(_RK_CIRCUIT_BREAKER, "0") == "1",
                 "panic_mode": _redis_safe_get(_RK_PANIC_MODE, "0") == "1",
                 "ai_mode": _redis_safe_get(_RK_AI_MODE, "0") == "1",
+                "execution_venue": _redis_safe_get(
+                    _RK_EXECUTION_VENUE, os.getenv("EXECUTION_VENUE", "IQ_OPTION")
+                ),
+                "account_type": _redis_safe_get(
+                    _RK_ACCOUNT_TYPE, os.getenv("IQ_OPTION_ACCOUNT_TYPE", "PRACTICE")
+                ),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             await ws.send_json(state)
@@ -526,6 +639,118 @@ async def telemetry_ws(ws: WebSocket) -> None:
         logger.info("WebSocket telemetry client disconnected")
     except Exception as exc:
         logger.warning(f"WebSocket error: {exc}")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  WEBSOCKET: /ws/prices (OHLCV Tick Stream)
+# ══════════════════════════════════════════════════════════════════════
+
+# In-memory price simulator for dev/demo mode.
+# In production, replace this with Redis Pub/Sub from the data handler.
+_PRICE_STATE: Dict[str, float] = {
+    "price": 1.08500,  # EUR/USD starting price
+    "volume": 0.0,
+}
+
+
+def _generate_tick() -> Dict[str, Any]:
+    """Generate a realistic OHLCV tick for demo/dev mode."""
+    p = _PRICE_STATE["price"]
+    # Brownian-motion step with slight mean reversion
+    delta = random.gauss(0, 0.00015) - (p - 1.08500) * 0.001
+    new_price = round(p + delta, 5)
+    _PRICE_STATE["price"] = new_price
+
+    # Simulate OHLCV candle
+    high = round(new_price + abs(random.gauss(0, 0.00008)), 5)
+    low = round(new_price - abs(random.gauss(0, 0.00008)), 5)
+    vol = round(random.uniform(50, 500), 2)
+
+    return {
+        "type": "price",
+        "asset": "EURUSD",
+        "open": p,
+        "high": high,
+        "low": low,
+        "close": new_price,
+        "volume": vol,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.websocket("/ws/prices")
+async def prices_ws(ws: WebSocket) -> None:
+    """
+    Live OHLCV price stream.
+    Emits a tick every 500ms for lightweight-charts integration.
+    In production, this reads from Redis Pub/Sub (data handler publishes ticks).
+    """
+    await ws.accept()
+    logger.info("WebSocket prices client connected")
+
+    try:
+        while True:
+            tick = _generate_tick()
+            await ws.send_json(tick)
+            await asyncio.sleep(0.5)  # 2 ticks/second
+    except WebSocketDisconnect:
+        logger.info("WebSocket prices client disconnected")
+    except Exception as exc:
+        logger.warning(f"WebSocket prices error: {exc}")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  WEBSOCKET: /ws/logs (Live Log Tail)
+# ══════════════════════════════════════════════════════════════════════
+
+@app.websocket("/ws/logs")
+async def logs_ws(ws: WebSocket) -> None:
+    """
+    Live log tail stream.
+    Reads the last N lines of nexus_session.log and streams new lines.
+    Similar to `tail -f` but over WebSocket.
+    """
+    await ws.accept()
+    logger.info("WebSocket logs client connected")
+
+    last_pos: int = 0
+
+    try:
+        # Send initial burst: last 50 lines
+        if _LOG_FILE.exists():
+            with open(_LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
+                lines = f.readlines()
+                initial_lines = lines[-50:] if len(lines) > 50 else lines
+                for line in initial_lines:
+                    await ws.send_json({
+                        "type": "log",
+                        "line": line.rstrip("\n"),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    })
+                last_pos = f.tell()
+
+        # Continuous tail
+        while True:
+            if _LOG_FILE.exists():
+                with open(_LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
+                    f.seek(last_pos)
+                    new_lines = f.readlines()
+                    last_pos = f.tell()
+
+                    for line in new_lines:
+                        stripped = line.rstrip("\n")
+                        if stripped:
+                            await ws.send_json({
+                                "type": "log",
+                                "line": stripped,
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                            })
+
+            await asyncio.sleep(1)  # Poll every 1s
+    except WebSocketDisconnect:
+        logger.info("WebSocket logs client disconnected")
+    except Exception as exc:
+        logger.warning(f"WebSocket logs error: {exc}")
 
 
 # ══════════════════════════════════════════════════════════════════════

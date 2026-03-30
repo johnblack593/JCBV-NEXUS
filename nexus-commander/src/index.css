@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════
+   NEXUS Commander — Design System Tokens (TailwindCSS v4)
+   ═══════════════════════════════════════════════════════════════ */
+
+@theme {
+  --color-nexus-bg: #0B0E14;
+  --color-nexus-surface: #111827;
+  --color-nexus-surface-2: #1a2332;
+  --color-nexus-border: #1F2937;
+  --color-nexus-border-light: #374151;
+  --color-nexus-text: #F9FAFB;
+  --color-nexus-text-dim: #9CA3AF;
+  --color-nexus-text-muted: #6B7280;
+  --color-nexus-cyan: #06B6D4;
+  --color-nexus-cyan-glow: #06B6D433;
+  --color-nexus-purple: #8B5CF6;
+  --color-nexus-purple-glow: #8B5CF633;
+  --color-nexus-red: #EF4444;
+  --color-nexus-red-glow: #EF444433;
+  --color-nexus-green: #10B981;
+  --color-nexus-green-glow: #10B98133;
+  --color-nexus-amber: #F59E0B;
+  --color-nexus-amber-glow: #F59E0B33;
+
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-display: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Base Resets
+   ═══════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-display);
+  background-color: var(--color-nexus-bg);
+  color: var(--color-nexus-text);
+  overflow: hidden;
+  height: 100vh;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Scrollbar Styling
+   ═══════════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-nexus-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-nexus-border-light);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-nexus-text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Animations
+   ═══════════════════════════════════════════════════════════════ */
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px var(--color-nexus-cyan-glow); }
+  50% { box-shadow: 0 0 24px var(--color-nexus-cyan-glow), 0 0 48px var(--color-nexus-cyan-glow); }
+}
+
+@keyframes panic-flash {
+  0%, 100% { background-color: var(--color-nexus-red); }
+  50% { background-color: #991B1B; }
+}
+
+@keyframes regime-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes slide-in {
+  from { transform: translateX(-20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+.animate-panic-flash { animation: panic-flash 0.5s ease-in-out infinite; }
+.animate-regime-pulse { animation: regime-pulse 1.5s ease-in-out infinite; }
+.animate-slide-in { animation: slide-in 0.3s ease-out; }
+.animate-fade-in { animation: fade-in 0.4s ease-out; }
+
+/* ═══════════════════════════════════════════════════════════════
+   Glass Morphism Cards
+   ═══════════════════════════════════════════════════════════════ */
+
+.glass-card {
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.9), rgba(26, 35, 50, 0.7));
+  border: 1px solid var(--color-nexus-border);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glass-card:hover {
+  border-color: var(--color-nexus-border-light);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Regime Color Classes
+   ═══════════════════════════════════════════════════════════════ */
+
+.regime-green { color: var(--color-nexus-green); }
+.regime-yellow { color: var(--color-nexus-amber); }
+.regime-red { color: var(--color-nexus-red); }
+.regime-bg-green { background-color: var(--color-nexus-green-glow); border-color: var(--color-nexus-green); }
+.regime-bg-yellow { background-color: var(--color-nexus-amber-glow); border-color: var(--color-nexus-amber); }
+.regime-bg-red { background-color: var(--color-nexus-red-glow); border-color: var(--color-nexus-red); }
+
+/* ═══════════════════════════════════════════════════════════════
+   Google Fonts Import
+   ═══════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
