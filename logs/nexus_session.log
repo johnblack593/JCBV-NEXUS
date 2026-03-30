@@ -85,3 +85,636 @@
 2026-03-30 03:53:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
 2026-03-30 03:54:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
 2026-03-30 03:55:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 03:56:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 03:57:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 03:58:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 03:59:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:00:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:01:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:02:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:03:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:04:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:05:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:06:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:07:56 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:08:37 │ nexus.main                   │ INFO    │ 🛑 Shutdown signal received.
+2026-03-30 04:08:37 │ nexus.main                   │ INFO    │ 🛑 Initiating graceful shutdown...
+2026-03-30 04:08:37 │ nexus.pipeline               │ INFO    │ 🛑 NEXUS Pipeline — Shutting down...
+2026-03-30 04:08:38 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': '1012300288', 'text': '🛑 *NEXUS v4.0 OFFLINE*\n─────────────────\n💼 *Trades today:* `0`\n📈 *Session P&L:* `+$0.00`\n🌐 *Venue:* `IQ_OPTION`\n─────────────────\n⏱ 2026-03-29 23:08:37 GMT-5', 'parse_mode': <ParseMode.MARKDOWN>}`
+2026-03-30 04:23:01 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:23:01 │ nexus.preflight              │ INFO    │   NEXUS v4.0 — Pre-Flight Health Checks
+2026-03-30 04:23:01 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:23:01 │ nexus.preflight              │ INFO    │   Venue: IQ_OPTION
+2026-03-30 04:23:01 │ nexus.preflight              │ INFO    │ 
+2026-03-30 04:23:10 │ nexus.preflight              │ WARNING │   ⚠️  Redis         → OFFLINE (localhost:6379): Error 111 connecting to localhost:6379. Connection refused.
+2026-03-30 04:23:10 │ nexus.preflight              │ WARNING │      Pipeline will run without shared state (local fallback).
+2026-03-30 04:23:10 │ nexus.preflight              │ INFO    │   ✅ QuestDB       → nexus-questdb:8812
+2026-03-30 04:23:10 │ nexus.preflight              │ INFO    │   ✅ Telegram       → Token loaded (chat: 101230...)
+2026-03-30 04:23:10 │ nexus.preflight              │ INFO    │ 
+2026-03-30 04:23:10 │ nexus.preflight              │ INFO    │   Result: 3/3 checks passed
+2026-03-30 04:23:10 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:23:10 │ nexus.pipeline               │ INFO    │ 🚀 NEXUS Pipeline v4.0 — Initializing [IQ_OPTION]
+2026-03-30 04:23:19 │ nexus.pipeline               │ WARNING │ Redis no disponible: Error 111 connecting to localhost:6379. Connection refused.. Operando sin estado compartido.
+2026-03-30 04:23:19 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB PG pool conectado (nexus-questdb:8812)
+2026-03-30 04:23:19 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB ILP socket conectado (nexus-questdb:9009)
+2026-03-30 04:23:20 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB schema verificado/creado (4 tablas)
+2026-03-30 04:23:20 │ nexus.macro                  │ INFO    │ 🌐 MacroAgent v4.0 iniciado — Intervalo: 1.0h | Provider: groq
+2026-03-30 04:23:20 │ nexus.pipeline               │ INFO    │ 📊 Signal Engine mode=binary
+2026-03-30 04:23:20 │ nexus.ml_engine              │ INFO    │ MLEngine: TensorFlow=True, SB3=True, sklearn=True
+2026-03-30 04:23:20 │ nexus.pipeline               │ INFO    │ 🛡️ QuantRiskManager inicializado
+2026-03-30 04:23:20 │ nexus.execution.iqoption     │ WARNING │ iqoptionapi no instalado. Ejecución IQ desactivada.
+2026-03-30 04:23:20 │ nexus.execution.factory      │ INFO    │ 🏭 Factory → IQOptionExecutionEngine instanciado
+2026-03-30 04:23:20 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:23:20 │ nexus.pipeline               │ WARNING │ ⚠️ Execution engine no conectado. Pipeline en modo dry-run.
+2026-03-30 04:23:20 │ nexus.pipeline               │ INFO    │ ✅ NEXUS Pipeline v4.0 — All 5 layers initialized [IQ_OPTION]
+   Config: {'signal_mode': 'binary', 'base_size': 1.0, 'max_size': 50.0, 'max_daily_trades': 3, 'min_confidence': 0.55, 'min_payout': 80, 'cooldown_between_trades_s': 300}
+2026-03-30 04:23:20 │ nexus.observability          │ INFO    │ 📊 Prometheus metrics server → http://0.0.0.0:9090/metrics
+2026-03-30 04:23:20 │ telegram.Bot                 │ DEBUG   │ Set Bot API URL: https://api.telegram.org/bot8755850491:AAEXjhGYs7lBqGUvAD45esKZuwGole_YXHI
+2026-03-30 04:23:20 │ telegram.Bot                 │ DEBUG   │ Set Bot API File URL: https://api.telegram.org/file/bot8755850491:AAEXjhGYs7lBqGUvAD45esKZuwGole_YXHI
+2026-03-30 04:23:20 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `getMe` with parameters `{}`
+2026-03-30 04:23:20 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2026-03-30 04:23:20 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x7eba802df810>
+2026-03-30 04:23:20 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x7eba7de06330> server_hostname='api.telegram.org' timeout=5.0
+2026-03-30 04:23:21 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x7eba7dec8250>
+2026-03-30 04:23:21 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:23:21 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:23:21 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:23:21 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:23:21 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:23:22 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:23:21 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'319'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:23:22 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:23:22 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:23:22 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:23:22 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:23:22 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `getMe` finished with return value `{'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot', 'can_join_groups': True, 'can_read_all_group_messages': False, 'supports_inline_queries': False, 'can_connect_to_business': False, 'has_main_web_app': False, 'has_topics_enabled': False, 'allows_users_to_create_topics': False}`
+2026-03-30 04:23:22 │ nexus.telegram               │ INFO    │ 📱 Telegram conectado: @NexusJCBV_bot
+2026-03-30 04:23:22 │ nexus.main                   │ INFO    │ 🎛️ OCP Dashboard LIVE on http://0.0.0.0:8000
+2026-03-30 04:23:22 │ groq._base_client            │ DEBUG   │ Request options: {'method': 'post', 'url': '/openai/v1/chat/completions', 'files': None, 'idempotency_key': 'stainless-python-retry-b59167cd-df89-4d2f-b244-447b9beb5a9f', 'json_data': {'messages': [{'role': 'system', 'content': 'Eres un analista macroeconómico institucional. Tu ÚNICO trabajo es clasificar\nel régimen de mercado actual en una de tres categorías basándote en los datos proporcionados.\n\nREGLAS ESTRICTAS:\n1. Responde SIEMPRE en JSON válido, sin texto adicional.\n2. El campo "regime" SOLO puede ser: "GREEN", "YELLOW" o "RED".\n3. "GREEN" = Mercado normal, baja volatilidad, sin eventos macro pendientes.\n4. "YELLOW" = Cautela, volatilidad moderada, eventos macro en 24h.\n5. "RED" = STOP total, evento de alto impacto activo (NFP, FOMC, CPI, Black Swan).\n6. El campo "reasoning" explica tu razonamiento en español (max 200 chars).\n7. El campo "fear_greed_adjustment" es un número entre -20 y +20 (ajuste fino).\n\nFormato JSON:\n{"regime": "GREEN|YELLOW|RED", "reasoning": "explicacion", "fear_greed_adjustment": 0}'}, {'role': 'user', 'content': 'Analiza el estado macro actual y clasifica el régimen:\n\n== FEAR & GREED INDEX ==\nScore: 8/100\nClassification: Extreme Fear\n\n== CONTEXTO TEMPORAL ==\nHora UTC: 2026-03-30 04:23 UTC\nDía de la semana: Monday\n\n== HISTORIAL DE REGÍMENES (últimas 6h) ==\n  Sin historial previo\n\nResponde SOLO con el JSON de clasificación:'}], 'model': 'llama-3.3-70b-versatile', 'max_tokens': 256, 'n': 1, 'reasoning_effort': None, 'reasoning_format': None, 'service_tier': 'on_demand', 'stop': None, 'stream': False, 'temperature': 1e-08}}
+2026-03-30 04:23:22 │ nexus.main                   │ INFO    │ 🚀 NEXUS v4.0 — Pipeline LIVE
+2026-03-30 04:23:22 │ groq._base_client            │ DEBUG   │ Sending HTTP Request: POST https://api.groq.com/openai/v1/chat/completions
+2026-03-30 04:23:22 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.groq.com' port=443 local_address=None timeout=None socket_options=None
+2026-03-30 04:23:22 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x7eba6fceaed0>
+2026-03-30 04:23:22 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x7eba6fd48e60> server_hostname='api.groq.com' timeout=None
+2026-03-30 04:23:22 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x7eba6fbad190>
+2026-03-30 04:23:22 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:23:22 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:23:22 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:23:22 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:23:22 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:23:22 │ nexus.pipeline               │ INFO    │ 🔄 Pipeline main loop started
+2026-03-30 04:23:22 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:23:22 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:23:23 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:23:23 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Mon, 30 Mar 2026 04:23:23 GMT'), (b'Content-Type', b'application/json'), (b'Transfer-Encoding', b'chunked'), (b'Connection', b'keep-alive'), (b'Cache-Control', b'private, max-age=0, no-store, no-cache, must-revalidate'), (b'Server', b'cloudflare'), (b'vary', b'Origin'), (b'x-groq-region', b'msp'), (b'x-ratelimit-limit-requests', b'1000'), (b'x-ratelimit-limit-tokens', b'12000'), (b'x-ratelimit-remaining-requests', b'999'), (b'x-ratelimit-remaining-tokens', b'11613'), (b'x-ratelimit-reset-requests', b'1m26.4s'), (b'x-ratelimit-reset-tokens', b'1.935s'), (b'x-request-id', b'req_01kmyfpth0ey1r83tq34yztfcy'), (b'set-cookie', b'__cf_bm=21RqBZQQYhVnEf3o.dmobjl.vsdgxokwQgb8wwlei1M-1774844602.8373878-1.0.1.1-.7Zi6ymwm8Yn7UlVWK9tme6a9z1IQ8wdabs2wH4XeuKlLQznpV518QnLLvQ74stkH0vXCY0engcyD8ZKRBmJK7nlD2tfEiPU397aMJuwHsCHJS26eQ0j2biCqIsBiB_a; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 30 Mar 2026 04:53:23 GMT'), (b'Strict-Transport-Security', b'max-age=15552000'), (b'cf-cache-status', b'DYNAMIC'), (b'Content-Encoding', b'gzip'), (b'CF-RAY', b'9e4456afbd4f824d-GYE'), (b'alt-svc', b'h3=":443"; ma=86400')])
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:23:23 │ groq._base_client            │ DEBUG   │ HTTP Response: POST https://api.groq.com/openai/v1/chat/completions "200 OK" Headers({'date': 'Mon, 30 Mar 2026 04:23:23 GMT', 'content-type': 'application/json', 'transfer-encoding': 'chunked', 'connection': 'keep-alive', 'cache-control': 'private, max-age=0, no-store, no-cache, must-revalidate', 'server': 'cloudflare', 'vary': 'Origin', 'x-groq-region': 'msp', 'x-ratelimit-limit-requests': '1000', 'x-ratelimit-limit-tokens': '12000', 'x-ratelimit-remaining-requests': '999', 'x-ratelimit-remaining-tokens': '11613', 'x-ratelimit-reset-requests': '1m26.4s', 'x-ratelimit-reset-tokens': '1.935s', 'x-request-id': 'req_01kmyfpth0ey1r83tq34yztfcy', 'set-cookie': '__cf_bm=21RqBZQQYhVnEf3o.dmobjl.vsdgxokwQgb8wwlei1M-1774844602.8373878-1.0.1.1-.7Zi6ymwm8Yn7UlVWK9tme6a9z1IQ8wdabs2wH4XeuKlLQznpV518QnLLvQ74stkH0vXCY0engcyD8ZKRBmJK7nlD2tfEiPU397aMJuwHsCHJS26eQ0j2biCqIsBiB_a; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 30 Mar 2026 04:53:23 GMT', 'strict-transport-security': 'max-age=15552000', 'cf-cache-status': 'DYNAMIC', 'content-encoding': 'gzip', 'cf-ray': '9e4456afbd4f824d-GYE', 'alt-svc': 'h3=":443"; ma=86400'})
+2026-03-30 04:23:23 │ nexus.macro                  │ WARNING │ 🌐 MACRO REGIME CHANGE: GREEN → RED | F&G: 8 (Extreme Fear) | Miedo extremo, posible evento de alto impacto | 2676ms
+2026-03-30 04:23:23 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': '1012300288', 'text': '🚨 *MACRO SHIFT*\n─────────────────\n📊 *Regime Change:* `GREEN` → 🔴 `RED`\n⚡ *Action:* HFT Engine PAUSED. No new trades.\n📋 *Reason:* Miedo extremo, posible evento de alto impacto\n─────────────────\n⏱ 2026-03-29 23:23:23 GMT-5', 'parse_mode': <ParseMode.MARKDOWN>}`
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:23:23 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'941'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:23:23 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:23:23 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `sendMessage` finished with return value `{'message_id': 47, 'from': {'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot'}, 'chat': {'id': 1012300288, 'first_name': 'JCBV', 'username': 'johnbarzola593', 'type': 'private'}, 'date': 1774844603, 'text': '🚨 MACRO SHIFT\n─────────────────\n📊 Regime Change: GREEN → 🔴 RED\n⚡ Action: HFT Engine PAUSED. No new trades.\n📋 Reason: Miedo extremo, posible evento de alto impacto\n─────────────────\n⏱ 2026-03-29 23:23:23 GMT-5', 'entities': [{'offset': 3, 'length': 11, 'type': 'bold'}, {'offset': 36, 'length': 14, 'type': 'bold'}, {'offset': 51, 'length': 5, 'type': 'code'}, {'offset': 62, 'length': 3, 'type': 'code'}, {'offset': 68, 'length': 7, 'type': 'bold'}, {'offset': 113, 'length': 7, 'type': 'bold'}]}`
+2026-03-30 04:24:22 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:25:22 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:26:23 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:26:54 │ nexus.main                   │ INFO    │ 🛑 Shutdown signal received.
+2026-03-30 04:26:54 │ nexus.main                   │ INFO    │ 🛑 Initiating graceful shutdown...
+2026-03-30 04:26:54 │ nexus.pipeline               │ INFO    │ 🛑 NEXUS Pipeline — Shutting down...
+2026-03-30 04:26:54 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': '1012300288', 'text': '🛑 *NEXUS v4.0 OFFLINE*\n─────────────────\n💼 *Trades today:* `0`\n📈 *Session P&L:* `+$0.00`\n🌐 *Venue:* `IQ_OPTION`\n─────────────────\n⏱ 2026-03-29 23:26:54 GMT-5', 'parse_mode': <ParseMode.MARKDOWN>}`
+2026-03-30 04:26:54 │ httpcore.connection          │ DEBUG   │ close.started
+2026-03-30 04:26:54 │ httpcore.connection          │ DEBUG   │ close.complete
+2026-03-30 04:26:54 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2026-03-30 04:26:54 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x7eba6f899710>
+2026-03-30 04:26:54 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x7eba7de06330> server_hostname='api.telegram.org' timeout=5.0
+2026-03-30 04:26:54 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x7eba7e83b450>
+2026-03-30 04:26:54 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:26:54 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:26:54 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:26:54 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:26:54 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:26:55 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:26:55 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'905'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:26:55 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:26:55 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:26:55 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:26:55 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:26:55 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `sendMessage` finished with return value `{'message_id': 48, 'from': {'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot'}, 'chat': {'id': 1012300288, 'first_name': 'JCBV', 'username': 'johnbarzola593', 'type': 'private'}, 'date': 1774844815, 'text': '🛑 NEXUS v4.0 OFFLINE\n─────────────────\n💼 Trades today: 0\n📈 Session P&L: +$0.00\n🌐 Venue: IQ_OPTION\n─────────────────\n⏱ 2026-03-29 23:26:54 GMT-5', 'entities': [{'offset': 3, 'length': 18, 'type': 'bold'}, {'offset': 43, 'length': 13, 'type': 'bold'}, {'offset': 57, 'length': 1, 'type': 'code'}, {'offset': 62, 'length': 12, 'type': 'bold'}, {'offset': 75, 'length': 6, 'type': 'code'}, {'offset': 85, 'length': 6, 'type': 'bold'}, {'offset': 92, 'length': 9, 'type': 'code'}]}`
+2026-03-30 04:26:55 │ nexus.macro                  │ INFO    │ 🌐 MacroAgent detenido.
+2026-03-30 04:26:55 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB desconectado.
+2026-03-30 04:26:55 │ nexus.pipeline               │ INFO    │ 🛑 NEXUS Pipeline — Shutdown complete | Trades: 0 | Venue: IQ_OPTION
+2026-03-30 04:26:55 │ nexus.main                   │ INFO    │ 🏁 NEXUS v4.0 — Session ended cleanly.
+2026-03-30 04:34:14 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:34:14 │ nexus.preflight              │ INFO    │   NEXUS v4.0 — Pre-Flight Health Checks
+2026-03-30 04:34:14 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:34:14 │ nexus.preflight              │ INFO    │   Venue: IQ_OPTION
+2026-03-30 04:34:14 │ nexus.preflight              │ INFO    │ 
+2026-03-30 04:34:23 │ nexus.preflight              │ WARNING │   ⚠️  Redis         → OFFLINE (localhost:6379): Error 111 connecting to localhost:6379. Connection refused.
+2026-03-30 04:34:23 │ nexus.preflight              │ WARNING │      Pipeline will run without shared state (local fallback).
+2026-03-30 04:34:23 │ nexus.preflight              │ INFO    │   ✅ QuestDB       → nexus-questdb:8812
+2026-03-30 04:34:23 │ nexus.preflight              │ INFO    │   ✅ Telegram       → Token loaded (chat: 101230...)
+2026-03-30 04:34:23 │ nexus.preflight              │ INFO    │ 
+2026-03-30 04:34:23 │ nexus.preflight              │ INFO    │   Result: 3/3 checks passed
+2026-03-30 04:34:23 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:34:23 │ nexus.pipeline               │ INFO    │ 🚀 NEXUS Pipeline v4.0 — Initializing [IQ_OPTION]
+2026-03-30 04:34:30 │ nexus.pipeline               │ WARNING │ Redis no disponible: Error 111 connecting to localhost:6379. Connection refused.. Operando sin estado compartido.
+2026-03-30 04:34:30 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB PG pool conectado (nexus-questdb:8812)
+2026-03-30 04:34:30 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB ILP socket conectado (nexus-questdb:9009)
+2026-03-30 04:34:30 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB schema verificado/creado (4 tablas)
+2026-03-30 04:34:30 │ nexus.macro                  │ INFO    │ 🌐 MacroAgent v4.0 iniciado — Intervalo: 1.0h | Provider: groq
+2026-03-30 04:34:30 │ nexus.pipeline               │ INFO    │ 📊 Signal Engine mode=binary
+2026-03-30 04:34:30 │ nexus.ml_engine              │ INFO    │ MLEngine: TensorFlow=True, SB3=False, sklearn=True
+2026-03-30 04:34:30 │ nexus.pipeline               │ INFO    │ 🛡️ QuantRiskManager inicializado
+2026-03-30 04:34:30 │ nexus.execution.iqoption     │ WARNING │ iqoptionapi no instalado. Ejecución IQ desactivada.
+2026-03-30 04:34:30 │ nexus.execution.factory      │ INFO    │ 🏭 Factory → IQOptionExecutionEngine instanciado
+2026-03-30 04:34:30 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:34:30 │ nexus.pipeline               │ WARNING │ ⚠️ Execution engine no conectado. Pipeline en modo dry-run.
+2026-03-30 04:34:30 │ nexus.pipeline               │ INFO    │ ✅ NEXUS Pipeline v4.0 — All 5 layers initialized [IQ_OPTION]
+   Config: {'signal_mode': 'binary', 'base_size': 1.0, 'max_size': 50.0, 'max_daily_trades': 3, 'min_confidence': 0.55, 'min_payout': 80, 'cooldown_between_trades_s': 300}
+2026-03-30 04:34:30 │ nexus.observability          │ INFO    │ 📊 Prometheus metrics server → http://0.0.0.0:9090/metrics
+2026-03-30 04:34:30 │ telegram.Bot                 │ DEBUG   │ Set Bot API URL: https://api.telegram.org/bot8755850491:AAEXjhGYs7lBqGUvAD45esKZuwGole_YXHI
+2026-03-30 04:34:30 │ telegram.Bot                 │ DEBUG   │ Set Bot API File URL: https://api.telegram.org/file/bot8755850491:AAEXjhGYs7lBqGUvAD45esKZuwGole_YXHI
+2026-03-30 04:34:30 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `getMe` with parameters `{}`
+2026-03-30 04:34:30 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2026-03-30 04:34:30 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x779394fa4910>
+2026-03-30 04:34:30 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x779394f1e720> server_hostname='api.telegram.org' timeout=5.0
+2026-03-30 04:34:31 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x779394fd4cd0>
+2026-03-30 04:34:31 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:34:31 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:34:31 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:34:31 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:34:31 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:34:32 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:34:31 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'319'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:34:32 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:34:32 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:34:32 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:34:32 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:34:32 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `getMe` finished with return value `{'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot', 'can_join_groups': True, 'can_read_all_group_messages': False, 'supports_inline_queries': False, 'can_connect_to_business': False, 'has_main_web_app': False, 'has_topics_enabled': False, 'allows_users_to_create_topics': False}`
+2026-03-30 04:34:32 │ nexus.telegram               │ INFO    │ 📱 Telegram conectado: @NexusJCBV_bot
+2026-03-30 04:34:32 │ nexus.main                   │ INFO    │ 🎛️ OCP Dashboard LIVE on http://0.0.0.0:8000
+2026-03-30 04:34:32 │ groq._base_client            │ DEBUG   │ Request options: {'method': 'post', 'url': '/openai/v1/chat/completions', 'files': None, 'idempotency_key': 'stainless-python-retry-ec5cacd9-2d49-471e-8d5c-c3ef09d53003', 'json_data': {'messages': [{'role': 'system', 'content': 'Eres un analista macroeconómico institucional. Tu ÚNICO trabajo es clasificar\nel régimen de mercado actual en una de tres categorías basándote en los datos proporcionados.\n\nREGLAS ESTRICTAS:\n1. Responde SIEMPRE en JSON válido, sin texto adicional.\n2. El campo "regime" SOLO puede ser: "GREEN", "YELLOW" o "RED".\n3. "GREEN" = Mercado normal, baja volatilidad, sin eventos macro pendientes.\n4. "YELLOW" = Cautela, volatilidad moderada, eventos macro en 24h.\n5. "RED" = STOP total, evento de alto impacto activo (NFP, FOMC, CPI, Black Swan).\n6. El campo "reasoning" explica tu razonamiento en español (max 200 chars).\n7. El campo "fear_greed_adjustment" es un número entre -20 y +20 (ajuste fino).\n\nFormato JSON:\n{"regime": "GREEN|YELLOW|RED", "reasoning": "explicacion", "fear_greed_adjustment": 0}'}, {'role': 'user', 'content': 'Analiza el estado macro actual y clasifica el régimen:\n\n== FEAR & GREED INDEX ==\nScore: 8/100\nClassification: Extreme Fear\n\n== CONTEXTO TEMPORAL ==\nHora UTC: 2026-03-30 04:34 UTC\nDía de la semana: Monday\n\n== HISTORIAL DE REGÍMENES (últimas 6h) ==\n  Sin historial previo\n\nResponde SOLO con el JSON de clasificación:'}], 'model': 'llama-3.3-70b-versatile', 'max_tokens': 256, 'n': 1, 'reasoning_effort': None, 'reasoning_format': None, 'service_tier': 'on_demand', 'stop': None, 'stream': False, 'temperature': 1e-08}}
+2026-03-30 04:34:32 │ nexus.main                   │ INFO    │ 🚀 NEXUS v4.0 — Pipeline LIVE
+2026-03-30 04:34:32 │ groq._base_client            │ DEBUG   │ Sending HTTP Request: POST https://api.groq.com/openai/v1/chat/completions
+2026-03-30 04:34:32 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.groq.com' port=443 local_address=None timeout=None socket_options=None
+2026-03-30 04:34:32 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x779387273150>
+2026-03-30 04:34:32 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x7793872d43b0> server_hostname='api.groq.com' timeout=None
+2026-03-30 04:34:32 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x77938713ced0>
+2026-03-30 04:34:32 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:34:32 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:34:32 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:34:32 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:34:32 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Mon, 30 Mar 2026 04:34:33 GMT'), (b'Content-Type', b'application/json'), (b'Transfer-Encoding', b'chunked'), (b'Connection', b'keep-alive'), (b'Cache-Control', b'private, max-age=0, no-store, no-cache, must-revalidate'), (b'Server', b'cloudflare'), (b'vary', b'Origin'), (b'x-groq-region', b'msp'), (b'x-ratelimit-limit-requests', b'1000'), (b'x-ratelimit-limit-tokens', b'12000'), (b'x-ratelimit-remaining-requests', b'999'), (b'x-ratelimit-remaining-tokens', b'11613'), (b'x-ratelimit-reset-requests', b'1m26.4s'), (b'x-ratelimit-reset-tokens', b'1.935s'), (b'x-request-id', b'req_01kmygb8z3eqp9mjz98wwegjca'), (b'set-cookie', b'__cf_bm=BL7g4.hI8g0wr9jPiXCGpaeW5yi6fgOtJJu0MtlitTY-1774845272.9937425-1.0.1.1-Ag9l8.HIC0hnTF6ZriXo4ImD2ezRmYWFsABGeRSWKs7h4r9imQs7pqB8F7O3THQNgxY6sHcqzcmistwC4WqdZ7_IKYXA9UXjfQ3gZtl3Jt46ynxwbZ7nGfINDSPSuBUk; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 30 Mar 2026 05:04:33 GMT'), (b'Strict-Transport-Security', b'max-age=15552000'), (b'cf-cache-status', b'DYNAMIC'), (b'Content-Encoding', b'gzip'), (b'CF-RAY', b'9e44670c386a325a-GYE'), (b'alt-svc', b'h3=":443"; ma=86400')])
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:34:33 │ groq._base_client            │ DEBUG   │ HTTP Response: POST https://api.groq.com/openai/v1/chat/completions "200 OK" Headers({'date': 'Mon, 30 Mar 2026 04:34:33 GMT', 'content-type': 'application/json', 'transfer-encoding': 'chunked', 'connection': 'keep-alive', 'cache-control': 'private, max-age=0, no-store, no-cache, must-revalidate', 'server': 'cloudflare', 'vary': 'Origin', 'x-groq-region': 'msp', 'x-ratelimit-limit-requests': '1000', 'x-ratelimit-limit-tokens': '12000', 'x-ratelimit-remaining-requests': '999', 'x-ratelimit-remaining-tokens': '11613', 'x-ratelimit-reset-requests': '1m26.4s', 'x-ratelimit-reset-tokens': '1.935s', 'x-request-id': 'req_01kmygb8z3eqp9mjz98wwegjca', 'set-cookie': '__cf_bm=BL7g4.hI8g0wr9jPiXCGpaeW5yi6fgOtJJu0MtlitTY-1774845272.9937425-1.0.1.1-Ag9l8.HIC0hnTF6ZriXo4ImD2ezRmYWFsABGeRSWKs7h4r9imQs7pqB8F7O3THQNgxY6sHcqzcmistwC4WqdZ7_IKYXA9UXjfQ3gZtl3Jt46ynxwbZ7nGfINDSPSuBUk; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 30 Mar 2026 05:04:33 GMT', 'strict-transport-security': 'max-age=15552000', 'cf-cache-status': 'DYNAMIC', 'content-encoding': 'gzip', 'cf-ray': '9e44670c386a325a-GYE', 'alt-svc': 'h3=":443"; ma=86400'})
+2026-03-30 04:34:33 │ nexus.pipeline               │ INFO    │ 🔄 Pipeline main loop started
+2026-03-30 04:34:33 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:34:33 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:34:33 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:34:33 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:34:33 │ nexus.macro                  │ WARNING │ 🌐 MACRO REGIME CHANGE: GREEN → RED | F&G: 8 (Extreme Fear) | Miedo extremo | 2642ms
+2026-03-30 04:34:33 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': '1012300288', 'text': '🚨 *MACRO SHIFT*\n─────────────────\n📊 *Regime Change:* `GREEN` → 🔴 `RED`\n⚡ *Action:* HFT Engine PAUSED. No new trades.\n📋 *Reason:* Miedo extremo\n─────────────────\n⏱ 2026-03-29 23:34:33 GMT-5', 'parse_mode': <ParseMode.MARKDOWN>}`
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:34:33 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'909'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:34:33 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:34:33 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `sendMessage` finished with return value `{'message_id': 49, 'from': {'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot'}, 'chat': {'id': 1012300288, 'first_name': 'JCBV', 'username': 'johnbarzola593', 'type': 'private'}, 'date': 1774845273, 'text': '🚨 MACRO SHIFT\n─────────────────\n📊 Regime Change: GREEN → 🔴 RED\n⚡ Action: HFT Engine PAUSED. No new trades.\n📋 Reason: Miedo extremo\n─────────────────\n⏱ 2026-03-29 23:34:33 GMT-5', 'entities': [{'offset': 3, 'length': 11, 'type': 'bold'}, {'offset': 36, 'length': 14, 'type': 'bold'}, {'offset': 51, 'length': 5, 'type': 'code'}, {'offset': 62, 'length': 3, 'type': 'code'}, {'offset': 68, 'length': 7, 'type': 'bold'}, {'offset': 113, 'length': 7, 'type': 'bold'}]}`
+2026-03-30 04:35:33 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:36:07 │ nexus.main                   │ INFO    │ 🛑 Shutdown signal received.
+2026-03-30 04:36:07 │ nexus.main                   │ INFO    │ 🛑 Initiating graceful shutdown...
+2026-03-30 04:36:07 │ nexus.pipeline               │ INFO    │ 🛑 NEXUS Pipeline — Shutting down...
+2026-03-30 04:36:07 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': '1012300288', 'text': '🛑 *NEXUS v4.0 OFFLINE*\n─────────────────\n💼 *Trades today:* `0`\n📈 *Session P&L:* `+$0.00`\n🌐 *Venue:* `IQ_OPTION`\n─────────────────\n⏱ 2026-03-29 23:36:07 GMT-5', 'parse_mode': <ParseMode.MARKDOWN>}`
+2026-03-30 04:36:07 │ httpcore.connection          │ DEBUG   │ close.started
+2026-03-30 04:36:07 │ httpcore.connection          │ DEBUG   │ close.complete
+2026-03-30 04:36:07 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2026-03-30 04:36:07 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x7793876dc1d0>
+2026-03-30 04:36:07 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x779394f1e720> server_hostname='api.telegram.org' timeout=5.0
+2026-03-30 04:36:07 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x779386e36290>
+2026-03-30 04:36:07 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:07 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:36:07 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:36:07 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:36:07 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:08 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:36:08 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'905'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:36:08 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:36:08 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:36:08 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:36:08 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:36:08 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `sendMessage` finished with return value `{'message_id': 50, 'from': {'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot'}, 'chat': {'id': 1012300288, 'first_name': 'JCBV', 'username': 'johnbarzola593', 'type': 'private'}, 'date': 1774845368, 'text': '🛑 NEXUS v4.0 OFFLINE\n─────────────────\n💼 Trades today: 0\n📈 Session P&L: +$0.00\n🌐 Venue: IQ_OPTION\n─────────────────\n⏱ 2026-03-29 23:36:07 GMT-5', 'entities': [{'offset': 3, 'length': 18, 'type': 'bold'}, {'offset': 43, 'length': 13, 'type': 'bold'}, {'offset': 57, 'length': 1, 'type': 'code'}, {'offset': 62, 'length': 12, 'type': 'bold'}, {'offset': 75, 'length': 6, 'type': 'code'}, {'offset': 85, 'length': 6, 'type': 'bold'}, {'offset': 92, 'length': 9, 'type': 'code'}]}`
+2026-03-30 04:36:08 │ nexus.macro                  │ INFO    │ 🌐 MacroAgent detenido.
+2026-03-30 04:36:08 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB desconectado.
+2026-03-30 04:36:08 │ nexus.pipeline               │ INFO    │ 🛑 NEXUS Pipeline — Shutdown complete | Trades: 0 | Venue: IQ_OPTION
+2026-03-30 04:36:08 │ nexus.main                   │ INFO    │ 🏁 NEXUS v4.0 — Session ended cleanly.
+2026-03-30 04:36:28 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:36:28 │ nexus.preflight              │ INFO    │   NEXUS v4.0 — Pre-Flight Health Checks
+2026-03-30 04:36:28 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:36:28 │ nexus.preflight              │ INFO    │   Venue: IQ_OPTION
+2026-03-30 04:36:28 │ nexus.preflight              │ INFO    │ 
+2026-03-30 04:36:28 │ nexus.preflight              │ INFO    │   ✅ Redis         → nexus-redis:6379
+2026-03-30 04:36:28 │ nexus.preflight              │ INFO    │   ✅ QuestDB       → nexus-questdb:8812
+2026-03-30 04:36:28 │ nexus.preflight              │ INFO    │   ✅ Telegram       → Token loaded (chat: 101230...)
+2026-03-30 04:36:28 │ nexus.preflight              │ INFO    │ 
+2026-03-30 04:36:28 │ nexus.preflight              │ INFO    │   Result: 3/3 checks passed
+2026-03-30 04:36:28 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:36:28 │ nexus.pipeline               │ INFO    │ 🚀 NEXUS Pipeline v4.0 — Initializing [IQ_OPTION]
+2026-03-30 04:36:28 │ nexus.pipeline               │ INFO    │ 🔴 Redis conectado (nexus-redis:6379)
+2026-03-30 04:36:28 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB PG pool conectado (nexus-questdb:8812)
+2026-03-30 04:36:28 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB ILP socket conectado (nexus-questdb:9009)
+2026-03-30 04:36:28 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB schema verificado/creado (4 tablas)
+2026-03-30 04:36:28 │ nexus.macro                  │ INFO    │ 🌐 MacroAgent v4.0 iniciado — Intervalo: 1.0h | Provider: groq
+2026-03-30 04:36:28 │ nexus.pipeline               │ INFO    │ 📊 Signal Engine mode=binary
+2026-03-30 04:36:28 │ nexus.ml_engine              │ INFO    │ MLEngine: TensorFlow=True, SB3=False, sklearn=True
+2026-03-30 04:36:28 │ nexus.pipeline               │ INFO    │ 🛡️ QuantRiskManager inicializado
+2026-03-30 04:36:28 │ nexus.execution.iqoption     │ WARNING │ iqoptionapi no instalado. Ejecución IQ desactivada.
+2026-03-30 04:36:28 │ nexus.execution.factory      │ INFO    │ 🏭 Factory → IQOptionExecutionEngine instanciado
+2026-03-30 04:36:28 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:36:28 │ nexus.pipeline               │ WARNING │ ⚠️ Execution engine no conectado. Pipeline en modo dry-run.
+2026-03-30 04:36:28 │ nexus.pipeline               │ INFO    │ ✅ NEXUS Pipeline v4.0 — All 5 layers initialized [IQ_OPTION]
+   Config: {'signal_mode': 'binary', 'base_size': 1.0, 'max_size': 50.0, 'max_daily_trades': 3, 'min_confidence': 0.55, 'min_payout': 80, 'cooldown_between_trades_s': 300}
+2026-03-30 04:36:28 │ nexus.observability          │ INFO    │ 📊 Prometheus metrics server → http://0.0.0.0:9090/metrics
+2026-03-30 04:36:28 │ telegram.Bot                 │ DEBUG   │ Set Bot API URL: https://api.telegram.org/bot8755850491:AAEXjhGYs7lBqGUvAD45esKZuwGole_YXHI
+2026-03-30 04:36:28 │ telegram.Bot                 │ DEBUG   │ Set Bot API File URL: https://api.telegram.org/file/bot8755850491:AAEXjhGYs7lBqGUvAD45esKZuwGole_YXHI
+2026-03-30 04:36:28 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `getMe` with parameters `{}`
+2026-03-30 04:36:28 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2026-03-30 04:36:28 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x777d4f05c090>
+2026-03-30 04:36:28 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x777d4f192720> server_hostname='api.telegram.org' timeout=5.0
+2026-03-30 04:36:29 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x777d4f05c1d0>
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:29 │ groq._base_client            │ DEBUG   │ Request options: {'method': 'post', 'url': '/openai/v1/chat/completions', 'files': None, 'idempotency_key': 'stainless-python-retry-47501916-7e23-441f-a6a2-52d218d20dfd', 'json_data': {'messages': [{'role': 'system', 'content': 'Eres un analista macroeconómico institucional. Tu ÚNICO trabajo es clasificar\nel régimen de mercado actual en una de tres categorías basándote en los datos proporcionados.\n\nREGLAS ESTRICTAS:\n1. Responde SIEMPRE en JSON válido, sin texto adicional.\n2. El campo "regime" SOLO puede ser: "GREEN", "YELLOW" o "RED".\n3. "GREEN" = Mercado normal, baja volatilidad, sin eventos macro pendientes.\n4. "YELLOW" = Cautela, volatilidad moderada, eventos macro en 24h.\n5. "RED" = STOP total, evento de alto impacto activo (NFP, FOMC, CPI, Black Swan).\n6. El campo "reasoning" explica tu razonamiento en español (max 200 chars).\n7. El campo "fear_greed_adjustment" es un número entre -20 y +20 (ajuste fino).\n\nFormato JSON:\n{"regime": "GREEN|YELLOW|RED", "reasoning": "explicacion", "fear_greed_adjustment": 0}'}, {'role': 'user', 'content': 'Analiza el estado macro actual y clasifica el régimen:\n\n== FEAR & GREED INDEX ==\nScore: 8/100\nClassification: Extreme Fear\n\n== CONTEXTO TEMPORAL ==\nHora UTC: 2026-03-30 04:36 UTC\nDía de la semana: Monday\n\n== HISTORIAL DE REGÍMENES (últimas 6h) ==\n  Sin historial previo\n\nResponde SOLO con el JSON de clasificación:'}], 'model': 'llama-3.3-70b-versatile', 'max_tokens': 256, 'n': 1, 'reasoning_effort': None, 'reasoning_format': None, 'service_tier': 'on_demand', 'stop': None, 'stream': False, 'temperature': 1e-08}}
+2026-03-30 04:36:29 │ groq._base_client            │ DEBUG   │ Sending HTTP Request: POST https://api.groq.com/openai/v1/chat/completions
+2026-03-30 04:36:29 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.groq.com' port=443 local_address=None timeout=None socket_options=None
+2026-03-30 04:36:29 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x777d4d30e9d0>
+2026-03-30 04:36:29 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x777d4d564290> server_hostname='api.groq.com' timeout=None
+2026-03-30 04:36:29 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x777d4d30ea90>
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:36:29 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'319'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:36:29 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:36:29 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `getMe` finished with return value `{'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot', 'can_join_groups': True, 'can_read_all_group_messages': False, 'supports_inline_queries': False, 'can_connect_to_business': False, 'has_main_web_app': False, 'has_topics_enabled': False, 'allows_users_to_create_topics': False}`
+2026-03-30 04:36:29 │ nexus.telegram               │ INFO    │ 📱 Telegram conectado: @NexusJCBV_bot
+2026-03-30 04:36:29 │ nexus.main                   │ INFO    │ 🎛️ OCP Dashboard LIVE on http://0.0.0.0:8000
+2026-03-30 04:36:29 │ nexus.main                   │ INFO    │ 🚀 NEXUS v4.0 — Pipeline LIVE
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Mon, 30 Mar 2026 04:36:30 GMT'), (b'Content-Type', b'application/json'), (b'Transfer-Encoding', b'chunked'), (b'Connection', b'keep-alive'), (b'Cache-Control', b'private, max-age=0, no-store, no-cache, must-revalidate'), (b'Server', b'cloudflare'), (b'vary', b'Origin'), (b'x-groq-region', b'msp'), (b'x-ratelimit-limit-requests', b'1000'), (b'x-ratelimit-limit-tokens', b'12000'), (b'x-ratelimit-remaining-requests', b'999'), (b'x-ratelimit-remaining-tokens', b'11585'), (b'x-ratelimit-reset-requests', b'1m26.4s'), (b'x-ratelimit-reset-tokens', b'2.075s'), (b'x-request-id', b'req_01kmygev4cf399bjjj0drwa0am'), (b'set-cookie', b'__cf_bm=Eb.ToqlrZkjZvX99vC.qzvOoXgFqUVxYu1s.J6JJpFQ-1774845389.90274-1.0.1.1-48wOov27HSM1z7wvoc_LhizdCLSqTGB7UTZkGqr5lItOGsMYGLjKz982sD.4Uo.MOfux2z9lC6MtcyaMBTNgLB3Eg3adbyhITgjHN5mjUyqDHhtRhoPGTWCvGVN36CEd; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 30 Mar 2026 05:06:30 GMT'), (b'Strict-Transport-Security', b'max-age=15552000'), (b'cf-cache-status', b'DYNAMIC'), (b'Content-Encoding', b'gzip'), (b'CF-RAY', b'9e4469e6ea988258-GYE'), (b'alt-svc', b'h3=":443"; ma=86400')])
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:36:30 │ groq._base_client            │ DEBUG   │ HTTP Response: POST https://api.groq.com/openai/v1/chat/completions "200 OK" Headers({'date': 'Mon, 30 Mar 2026 04:36:30 GMT', 'content-type': 'application/json', 'transfer-encoding': 'chunked', 'connection': 'keep-alive', 'cache-control': 'private, max-age=0, no-store, no-cache, must-revalidate', 'server': 'cloudflare', 'vary': 'Origin', 'x-groq-region': 'msp', 'x-ratelimit-limit-requests': '1000', 'x-ratelimit-limit-tokens': '12000', 'x-ratelimit-remaining-requests': '999', 'x-ratelimit-remaining-tokens': '11585', 'x-ratelimit-reset-requests': '1m26.4s', 'x-ratelimit-reset-tokens': '2.075s', 'x-request-id': 'req_01kmygev4cf399bjjj0drwa0am', 'set-cookie': '__cf_bm=Eb.ToqlrZkjZvX99vC.qzvOoXgFqUVxYu1s.J6JJpFQ-1774845389.90274-1.0.1.1-48wOov27HSM1z7wvoc_LhizdCLSqTGB7UTZkGqr5lItOGsMYGLjKz982sD.4Uo.MOfux2z9lC6MtcyaMBTNgLB3Eg3adbyhITgjHN5mjUyqDHhtRhoPGTWCvGVN36CEd; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 30 Mar 2026 05:06:30 GMT', 'strict-transport-security': 'max-age=15552000', 'cf-cache-status': 'DYNAMIC', 'content-encoding': 'gzip', 'cf-ray': '9e4469e6ea988258-GYE', 'alt-svc': 'h3=":443"; ma=86400'})
+2026-03-30 04:36:30 │ nexus.pipeline               │ INFO    │ 🔄 Pipeline main loop started
+2026-03-30 04:36:30 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:36:30 │ nexus.macro                  │ DEBUG   │ Redis MACRO_REGIME = RED
+2026-03-30 04:36:30 │ nexus.macro                  │ WARNING │ 🌐 MACRO REGIME CHANGE: GREEN → RED | F&G: 8 (Extreme Fear) | Miedo extremo | 1440ms
+2026-03-30 04:36:30 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': '1012300288', 'text': '🚨 *MACRO SHIFT*\n─────────────────\n📊 *Regime Change:* `GREEN` → 🔴 `RED`\n⚡ *Action:* HFT Engine PAUSED. No new trades.\n📋 *Reason:* Miedo extremo\n─────────────────\n⏱ 2026-03-29 23:36:30 GMT-5', 'parse_mode': <ParseMode.MARKDOWN>}`
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:36:30 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'909'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:36:30 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:36:30 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `sendMessage` finished with return value `{'message_id': 51, 'from': {'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot'}, 'chat': {'id': 1012300288, 'first_name': 'JCBV', 'username': 'johnbarzola593', 'type': 'private'}, 'date': 1774845390, 'text': '🚨 MACRO SHIFT\n─────────────────\n📊 Regime Change: GREEN → 🔴 RED\n⚡ Action: HFT Engine PAUSED. No new trades.\n📋 Reason: Miedo extremo\n─────────────────\n⏱ 2026-03-29 23:36:30 GMT-5', 'entities': [{'offset': 3, 'length': 11, 'type': 'bold'}, {'offset': 36, 'length': 14, 'type': 'bold'}, {'offset': 51, 'length': 5, 'type': 'code'}, {'offset': 62, 'length': 3, 'type': 'code'}, {'offset': 68, 'length': 7, 'type': 'bold'}, {'offset': 113, 'length': 7, 'type': 'bold'}]}`
+2026-03-30 04:36:34 │ nexus.main                   │ INFO    │ 🛑 Shutdown signal received.
+2026-03-30 04:36:34 │ nexus.main                   │ INFO    │ 🛑 Initiating graceful shutdown...
+2026-03-30 04:36:34 │ nexus.pipeline               │ INFO    │ 🛑 NEXUS Pipeline — Shutting down...
+2026-03-30 04:36:34 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': '1012300288', 'text': '🛑 *NEXUS v4.0 OFFLINE*\n─────────────────\n💼 *Trades today:* `0`\n📈 *Session P&L:* `+$0.00`\n🌐 *Venue:* `IQ_OPTION`\n─────────────────\n⏱ 2026-03-29 23:36:34 GMT-5', 'parse_mode': <ParseMode.MARKDOWN>}`
+2026-03-30 04:36:34 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:34 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:36:34 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:36:34 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:36:34 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:34 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:36:35 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'905'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:36:34 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:36:34 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:36:34 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:36:34 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:36:34 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `sendMessage` finished with return value `{'message_id': 52, 'from': {'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot'}, 'chat': {'id': 1012300288, 'first_name': 'JCBV', 'username': 'johnbarzola593', 'type': 'private'}, 'date': 1774845394, 'text': '🛑 NEXUS v4.0 OFFLINE\n─────────────────\n💼 Trades today: 0\n📈 Session P&L: +$0.00\n🌐 Venue: IQ_OPTION\n─────────────────\n⏱ 2026-03-29 23:36:34 GMT-5', 'entities': [{'offset': 3, 'length': 18, 'type': 'bold'}, {'offset': 43, 'length': 13, 'type': 'bold'}, {'offset': 57, 'length': 1, 'type': 'code'}, {'offset': 62, 'length': 12, 'type': 'bold'}, {'offset': 75, 'length': 6, 'type': 'code'}, {'offset': 85, 'length': 6, 'type': 'bold'}, {'offset': 92, 'length': 9, 'type': 'code'}]}`
+2026-03-30 04:36:35 │ nexus.macro                  │ INFO    │ 🌐 MacroAgent detenido.
+2026-03-30 04:36:35 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB desconectado.
+2026-03-30 04:36:35 │ nexus.pipeline               │ INFO    │ 🛑 NEXUS Pipeline — Shutdown complete | Trades: 0 | Venue: IQ_OPTION
+2026-03-30 04:36:35 │ nexus.main                   │ INFO    │ 🏁 NEXUS v4.0 — Session ended cleanly.
+2026-03-30 04:36:42 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:36:42 │ nexus.preflight              │ INFO    │   NEXUS v4.0 — Pre-Flight Health Checks
+2026-03-30 04:36:42 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:36:42 │ nexus.preflight              │ INFO    │   Venue: IQ_OPTION
+2026-03-30 04:36:42 │ nexus.preflight              │ INFO    │ 
+2026-03-30 04:36:42 │ nexus.preflight              │ INFO    │   ✅ Redis         → nexus-redis:6379
+2026-03-30 04:36:42 │ nexus.preflight              │ INFO    │   ✅ QuestDB       → nexus-questdb:8812
+2026-03-30 04:36:42 │ nexus.preflight              │ INFO    │   ✅ Telegram       → Token loaded (chat: 101230...)
+2026-03-30 04:36:42 │ nexus.preflight              │ INFO    │ 
+2026-03-30 04:36:42 │ nexus.preflight              │ INFO    │   Result: 3/3 checks passed
+2026-03-30 04:36:42 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:36:42 │ nexus.pipeline               │ INFO    │ 🚀 NEXUS Pipeline v4.0 — Initializing [IQ_OPTION]
+2026-03-30 04:36:42 │ nexus.pipeline               │ INFO    │ 🔴 Redis conectado (nexus-redis:6379)
+2026-03-30 04:36:42 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB PG pool conectado (nexus-questdb:8812)
+2026-03-30 04:36:42 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB ILP socket conectado (nexus-questdb:9009)
+2026-03-30 04:36:42 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB schema verificado/creado (4 tablas)
+2026-03-30 04:36:42 │ nexus.macro                  │ INFO    │ 🌐 MacroAgent v4.0 iniciado — Intervalo: 1.0h | Provider: groq
+2026-03-30 04:36:42 │ nexus.pipeline               │ INFO    │ 📊 Signal Engine mode=binary
+2026-03-30 04:36:42 │ nexus.ml_engine              │ INFO    │ MLEngine: TensorFlow=True, SB3=False, sklearn=True
+2026-03-30 04:36:42 │ nexus.pipeline               │ INFO    │ 🛡️ QuantRiskManager inicializado
+2026-03-30 04:36:42 │ nexus.execution.iqoption     │ WARNING │ iqoptionapi no instalado. Ejecución IQ desactivada.
+2026-03-30 04:36:42 │ nexus.execution.factory      │ INFO    │ 🏭 Factory → IQOptionExecutionEngine instanciado
+2026-03-30 04:36:42 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:36:42 │ nexus.pipeline               │ WARNING │ ⚠️ Execution engine no conectado. Pipeline en modo dry-run.
+2026-03-30 04:36:42 │ nexus.pipeline               │ INFO    │ ✅ NEXUS Pipeline v4.0 — All 5 layers initialized [IQ_OPTION]
+   Config: {'signal_mode': 'binary', 'base_size': 1.0, 'max_size': 50.0, 'max_daily_trades': 3, 'min_confidence': 0.55, 'min_payout': 80, 'cooldown_between_trades_s': 300}
+2026-03-30 04:36:42 │ nexus.observability          │ INFO    │ 📊 Prometheus metrics server → http://0.0.0.0:9090/metrics
+2026-03-30 04:36:42 │ telegram.Bot                 │ DEBUG   │ Set Bot API URL: https://api.telegram.org/bot8755850491:AAEXjhGYs7lBqGUvAD45esKZuwGole_YXHI
+2026-03-30 04:36:42 │ telegram.Bot                 │ DEBUG   │ Set Bot API File URL: https://api.telegram.org/file/bot8755850491:AAEXjhGYs7lBqGUvAD45esKZuwGole_YXHI
+2026-03-30 04:36:42 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `getMe` with parameters `{}`
+2026-03-30 04:36:42 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2026-03-30 04:36:42 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71eaaa6de8d0>
+2026-03-30 04:36:42 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x71eaa9d62720> server_hostname='api.telegram.org' timeout=5.0
+2026-03-30 04:36:43 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71eaa9c28050>
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:36:43 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'319'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:36:43 │ groq._base_client            │ DEBUG   │ Request options: {'method': 'post', 'url': '/openai/v1/chat/completions', 'files': None, 'idempotency_key': 'stainless-python-retry-af8448a5-f9d6-4197-be42-e46058376a0c', 'json_data': {'messages': [{'role': 'system', 'content': 'Eres un analista macroeconómico institucional. Tu ÚNICO trabajo es clasificar\nel régimen de mercado actual en una de tres categorías basándote en los datos proporcionados.\n\nREGLAS ESTRICTAS:\n1. Responde SIEMPRE en JSON válido, sin texto adicional.\n2. El campo "regime" SOLO puede ser: "GREEN", "YELLOW" o "RED".\n3. "GREEN" = Mercado normal, baja volatilidad, sin eventos macro pendientes.\n4. "YELLOW" = Cautela, volatilidad moderada, eventos macro en 24h.\n5. "RED" = STOP total, evento de alto impacto activo (NFP, FOMC, CPI, Black Swan).\n6. El campo "reasoning" explica tu razonamiento en español (max 200 chars).\n7. El campo "fear_greed_adjustment" es un número entre -20 y +20 (ajuste fino).\n\nFormato JSON:\n{"regime": "GREEN|YELLOW|RED", "reasoning": "explicacion", "fear_greed_adjustment": 0}'}, {'role': 'user', 'content': 'Analiza el estado macro actual y clasifica el régimen:\n\n== FEAR & GREED INDEX ==\nScore: 8/100\nClassification: Extreme Fear\n\n== CONTEXTO TEMPORAL ==\nHora UTC: 2026-03-30 04:36 UTC\nDía de la semana: Monday\n\n== HISTORIAL DE REGÍMENES (últimas 6h) ==\n  Sin historial previo\n\nResponde SOLO con el JSON de clasificación:'}], 'model': 'llama-3.3-70b-versatile', 'max_tokens': 256, 'n': 1, 'reasoning_effort': None, 'reasoning_format': None, 'service_tier': 'on_demand', 'stop': None, 'stream': False, 'temperature': 1e-08}}
+2026-03-30 04:36:43 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `getMe` finished with return value `{'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot', 'can_join_groups': True, 'can_read_all_group_messages': False, 'supports_inline_queries': False, 'can_connect_to_business': False, 'has_main_web_app': False, 'has_topics_enabled': False, 'allows_users_to_create_topics': False}`
+2026-03-30 04:36:43 │ groq._base_client            │ DEBUG   │ Sending HTTP Request: POST https://api.groq.com/openai/v1/chat/completions
+2026-03-30 04:36:43 │ nexus.telegram               │ INFO    │ 📱 Telegram conectado: @NexusJCBV_bot
+2026-03-30 04:36:43 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.groq.com' port=443 local_address=None timeout=None socket_options=None
+2026-03-30 04:36:43 │ nexus.main                   │ INFO    │ 🎛️ OCP Dashboard LIVE on http://0.0.0.0:8000
+2026-03-30 04:36:43 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x71ea9beaac10>
+2026-03-30 04:36:43 │ nexus.main                   │ INFO    │ 🚀 NEXUS v4.0 — Pipeline LIVE
+2026-03-30 04:36:43 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x71ea9bf0c290> server_hostname='api.groq.com' timeout=None
+2026-03-30 04:36:43 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x71ea9bea95d0>
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Mon, 30 Mar 2026 04:36:44 GMT'), (b'Content-Type', b'application/json'), (b'Transfer-Encoding', b'chunked'), (b'Connection', b'keep-alive'), (b'Cache-Control', b'private, max-age=0, no-store, no-cache, must-revalidate'), (b'Server', b'cloudflare'), (b'vary', b'Origin'), (b'x-groq-region', b'msp'), (b'x-ratelimit-limit-requests', b'1000'), (b'x-ratelimit-limit-tokens', b'12000'), (b'x-ratelimit-remaining-requests', b'998'), (b'x-ratelimit-remaining-tokens', b'11613'), (b'x-ratelimit-reset-requests', b'2m52.8s'), (b'x-ratelimit-reset-tokens', b'1.935s'), (b'x-request-id', b'req_01kmygf8rne4nsjhas19pz8ay0'), (b'set-cookie', b'__cf_bm=Xfjz5s1TIzaB_lRs8M0ZdiQfYS.Si7ohIRh1y2X1wcM-1774845403.86864-1.0.1.1-q5.V5hL9I6fNLccpGj75Je_K4JM.ASoPXQhnHzVQIVu2gf47fXfrhetNKEHEjAbN7V0WnTMwM.5MlnUadAXQNCSadhNz3FfEwEA4wkhh_cZO6sC_gtMqID1hMtJ8VIin; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 30 Mar 2026 05:06:44 GMT'), (b'Strict-Transport-Security', b'max-age=15552000'), (b'cf-cache-status', b'DYNAMIC'), (b'Content-Encoding', b'gzip'), (b'CF-RAY', b'9e446a3e2bb89af8-GYE'), (b'alt-svc', b'h3=":443"; ma=86400')])
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:36:43 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:36:43 │ groq._base_client            │ DEBUG   │ HTTP Response: POST https://api.groq.com/openai/v1/chat/completions "200 OK" Headers({'date': 'Mon, 30 Mar 2026 04:36:44 GMT', 'content-type': 'application/json', 'transfer-encoding': 'chunked', 'connection': 'keep-alive', 'cache-control': 'private, max-age=0, no-store, no-cache, must-revalidate', 'server': 'cloudflare', 'vary': 'Origin', 'x-groq-region': 'msp', 'x-ratelimit-limit-requests': '1000', 'x-ratelimit-limit-tokens': '12000', 'x-ratelimit-remaining-requests': '998', 'x-ratelimit-remaining-tokens': '11613', 'x-ratelimit-reset-requests': '2m52.8s', 'x-ratelimit-reset-tokens': '1.935s', 'x-request-id': 'req_01kmygf8rne4nsjhas19pz8ay0', 'set-cookie': '__cf_bm=Xfjz5s1TIzaB_lRs8M0ZdiQfYS.Si7ohIRh1y2X1wcM-1774845403.86864-1.0.1.1-q5.V5hL9I6fNLccpGj75Je_K4JM.ASoPXQhnHzVQIVu2gf47fXfrhetNKEHEjAbN7V0WnTMwM.5MlnUadAXQNCSadhNz3FfEwEA4wkhh_cZO6sC_gtMqID1hMtJ8VIin; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 30 Mar 2026 05:06:44 GMT', 'strict-transport-security': 'max-age=15552000', 'cf-cache-status': 'DYNAMIC', 'content-encoding': 'gzip', 'cf-ray': '9e446a3e2bb89af8-GYE', 'alt-svc': 'h3=":443"; ma=86400'})
+2026-03-30 04:36:44 │ nexus.pipeline               │ INFO    │ 🔄 Pipeline main loop started
+2026-03-30 04:36:44 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:36:44 │ nexus.macro                  │ DEBUG   │ Redis MACRO_REGIME = RED
+2026-03-30 04:36:44 │ nexus.macro                  │ WARNING │ 🌐 MACRO REGIME CHANGE: GREEN → RED | F&G: 8 (Extreme Fear) | Miedo extremo | 1370ms
+2026-03-30 04:36:44 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': '1012300288', 'text': '🚨 *MACRO SHIFT*\n─────────────────\n📊 *Regime Change:* `GREEN` → 🔴 `RED`\n⚡ *Action:* HFT Engine PAUSED. No new trades.\n📋 *Reason:* Miedo extremo\n─────────────────\n⏱ 2026-03-29 23:36:44 GMT-5', 'parse_mode': <ParseMode.MARKDOWN>}`
+2026-03-30 04:36:44 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:44 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:36:44 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:36:44 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:36:44 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:36:44 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:36:44 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'909'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:36:44 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:36:44 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:36:44 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:36:44 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:36:44 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `sendMessage` finished with return value `{'message_id': 53, 'from': {'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot'}, 'chat': {'id': 1012300288, 'first_name': 'JCBV', 'username': 'johnbarzola593', 'type': 'private'}, 'date': 1774845404, 'text': '🚨 MACRO SHIFT\n─────────────────\n📊 Regime Change: GREEN → 🔴 RED\n⚡ Action: HFT Engine PAUSED. No new trades.\n📋 Reason: Miedo extremo\n─────────────────\n⏱ 2026-03-29 23:36:44 GMT-5', 'entities': [{'offset': 3, 'length': 11, 'type': 'bold'}, {'offset': 36, 'length': 14, 'type': 'bold'}, {'offset': 51, 'length': 5, 'type': 'code'}, {'offset': 62, 'length': 3, 'type': 'code'}, {'offset': 68, 'length': 7, 'type': 'bold'}, {'offset': 113, 'length': 7, 'type': 'bold'}]}`
+2026-03-30 04:37:44 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:38:44 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:39:44 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:40:43 │ nexus.main                   │ INFO    │ 🛑 Shutdown signal received.
+2026-03-30 04:40:43 │ nexus.main                   │ INFO    │ 🛑 Initiating graceful shutdown...
+2026-03-30 04:40:43 │ nexus.pipeline               │ INFO    │ 🛑 NEXUS Pipeline — Shutting down...
+2026-03-30 04:40:43 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': '1012300288', 'text': '🛑 *NEXUS v4.0 OFFLINE*\n─────────────────\n💼 *Trades today:* `0`\n📈 *Session P&L:* `+$0.00`\n🌐 *Venue:* `IQ_OPTION`\n─────────────────\n⏱ 2026-03-29 23:40:43 GMT-5', 'parse_mode': <ParseMode.MARKDOWN>}`
+2026-03-30 04:40:43 │ httpcore.connection          │ DEBUG   │ close.started
+2026-03-30 04:40:43 │ httpcore.connection          │ DEBUG   │ close.complete
+2026-03-30 04:40:43 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2026-03-30 04:40:43 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ea9bbb9a50>
+2026-03-30 04:40:43 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x71eaa9d62720> server_hostname='api.telegram.org' timeout=5.0
+2026-03-30 04:40:43 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x71ea9ba2dc10>
+2026-03-30 04:40:43 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:40:43 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:40:43 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:40:43 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:40:43 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:40:44 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:40:44 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'905'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:40:44 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:40:44 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:40:44 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:40:44 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:40:44 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `sendMessage` finished with return value `{'message_id': 54, 'from': {'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot'}, 'chat': {'id': 1012300288, 'first_name': 'JCBV', 'username': 'johnbarzola593', 'type': 'private'}, 'date': 1774845644, 'text': '🛑 NEXUS v4.0 OFFLINE\n─────────────────\n💼 Trades today: 0\n📈 Session P&L: +$0.00\n🌐 Venue: IQ_OPTION\n─────────────────\n⏱ 2026-03-29 23:40:43 GMT-5', 'entities': [{'offset': 3, 'length': 18, 'type': 'bold'}, {'offset': 43, 'length': 13, 'type': 'bold'}, {'offset': 57, 'length': 1, 'type': 'code'}, {'offset': 62, 'length': 12, 'type': 'bold'}, {'offset': 75, 'length': 6, 'type': 'code'}, {'offset': 85, 'length': 6, 'type': 'bold'}, {'offset': 92, 'length': 9, 'type': 'code'}]}`
+2026-03-30 04:40:44 │ nexus.macro                  │ INFO    │ 🌐 MacroAgent detenido.
+2026-03-30 04:41:07 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:41:07 │ nexus.preflight              │ INFO    │   NEXUS v4.0 — Pre-Flight Health Checks
+2026-03-30 04:41:07 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:41:07 │ nexus.preflight              │ INFO    │   Venue: IQ_OPTION
+2026-03-30 04:41:07 │ nexus.preflight              │ INFO    │ 
+2026-03-30 04:41:07 │ nexus.preflight              │ INFO    │   ✅ Redis         → nexus-redis:6379
+2026-03-30 04:41:07 │ nexus.preflight              │ INFO    │   ✅ QuestDB       → nexus-questdb:8812
+2026-03-30 04:41:07 │ nexus.preflight              │ INFO    │   ✅ Telegram       → Token loaded (chat: 101230...)
+2026-03-30 04:41:07 │ nexus.preflight              │ INFO    │ 
+2026-03-30 04:41:07 │ nexus.preflight              │ INFO    │   Result: 3/3 checks passed
+2026-03-30 04:41:07 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:41:07 │ nexus.pipeline               │ INFO    │ 🚀 NEXUS Pipeline v4.0 — Initializing [IQ_OPTION]
+2026-03-30 04:41:07 │ nexus.pipeline               │ INFO    │ 🔴 Redis conectado (nexus-redis:6379)
+2026-03-30 04:41:07 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB PG pool conectado (nexus-questdb:8812)
+2026-03-30 04:41:07 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB ILP socket conectado (nexus-questdb:9009)
+2026-03-30 04:41:07 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB schema verificado/creado (4 tablas)
+2026-03-30 04:41:07 │ nexus.macro                  │ INFO    │ 🌐 MacroAgent v4.0 iniciado — Intervalo: 1.0h | Provider: groq
+2026-03-30 04:41:07 │ nexus.pipeline               │ INFO    │ 📊 Signal Engine mode=binary
+2026-03-30 04:41:07 │ nexus.ml_engine              │ INFO    │ MLEngine: TensorFlow=True, SB3=False, sklearn=True
+2026-03-30 04:41:07 │ nexus.pipeline               │ INFO    │ 🛡️ QuantRiskManager inicializado
+2026-03-30 04:41:07 │ nexus.execution.iqoption     │ WARNING │ iqoptionapi no instalado. Ejecución IQ desactivada.
+2026-03-30 04:41:07 │ nexus.execution.factory      │ INFO    │ 🏭 Factory → IQOptionExecutionEngine instanciado
+2026-03-30 04:41:07 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:41:07 │ nexus.pipeline               │ WARNING │ ⚠️ Execution engine no conectado. Pipeline en modo dry-run.
+2026-03-30 04:41:07 │ nexus.pipeline               │ INFO    │ ✅ NEXUS Pipeline v4.0 — All 5 layers initialized [IQ_OPTION]
+   Config: {'signal_mode': 'binary', 'base_size': 1.0, 'max_size': 50.0, 'max_daily_trades': 3, 'min_confidence': 0.55, 'min_payout': 80, 'cooldown_between_trades_s': 300}
+2026-03-30 04:41:07 │ nexus.observability          │ INFO    │ 📊 Prometheus metrics server → http://0.0.0.0:9090/metrics
+2026-03-30 04:41:07 │ telegram.Bot                 │ DEBUG   │ Set Bot API URL: https://api.telegram.org/bot8755850491:AAEXjhGYs7lBqGUvAD45esKZuwGole_YXHI
+2026-03-30 04:41:07 │ telegram.Bot                 │ DEBUG   │ Set Bot API File URL: https://api.telegram.org/file/bot8755850491:AAEXjhGYs7lBqGUvAD45esKZuwGole_YXHI
+2026-03-30 04:41:08 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `getMe` with parameters `{}`
+2026-03-30 04:41:08 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2026-03-30 04:41:08 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x76081ce95750>
+2026-03-30 04:41:08 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x76081ce887a0> server_hostname='api.telegram.org' timeout=5.0
+2026-03-30 04:41:08 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x76081e20fe10>
+2026-03-30 04:41:08 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:08 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:41:08 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:41:08 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:41:08 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:09 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:41:08 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'319'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:41:09 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:41:09 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:41:09 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:41:09 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:41:09 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `getMe` finished with return value `{'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot', 'can_join_groups': True, 'can_read_all_group_messages': False, 'supports_inline_queries': False, 'can_connect_to_business': False, 'has_main_web_app': False, 'has_topics_enabled': False, 'allows_users_to_create_topics': False}`
+2026-03-30 04:41:09 │ nexus.telegram               │ INFO    │ 📱 Telegram conectado: @NexusJCBV_bot
+2026-03-30 04:41:09 │ nexus.main                   │ INFO    │ 🎛️ OCP Dashboard LIVE on http://0.0.0.0:8000
+2026-03-30 04:41:09 │ groq._base_client            │ DEBUG   │ Request options: {'method': 'post', 'url': '/openai/v1/chat/completions', 'files': None, 'idempotency_key': 'stainless-python-retry-fb833865-7934-4db7-8e6f-1e52a5d315d9', 'json_data': {'messages': [{'role': 'system', 'content': 'Eres un analista macroeconómico institucional. Tu ÚNICO trabajo es clasificar\nel régimen de mercado actual en una de tres categorías basándote en los datos proporcionados.\n\nREGLAS ESTRICTAS:\n1. Responde SIEMPRE en JSON válido, sin texto adicional.\n2. El campo "regime" SOLO puede ser: "GREEN", "YELLOW" o "RED".\n3. "GREEN" = Mercado normal, baja volatilidad, sin eventos macro pendientes.\n4. "YELLOW" = Cautela, volatilidad moderada, eventos macro en 24h.\n5. "RED" = STOP total, evento de alto impacto activo (NFP, FOMC, CPI, Black Swan).\n6. El campo "reasoning" explica tu razonamiento en español (max 200 chars).\n7. El campo "fear_greed_adjustment" es un número entre -20 y +20 (ajuste fino).\n\nFormato JSON:\n{"regime": "GREEN|YELLOW|RED", "reasoning": "explicacion", "fear_greed_adjustment": 0}'}, {'role': 'user', 'content': 'Analiza el estado macro actual y clasifica el régimen:\n\n== FEAR & GREED INDEX ==\nScore: 8/100\nClassification: Extreme Fear\n\n== CONTEXTO TEMPORAL ==\nHora UTC: 2026-03-30 04:41 UTC\nDía de la semana: Monday\n\n== HISTORIAL DE REGÍMENES (últimas 6h) ==\n  Sin historial previo\n\nResponde SOLO con el JSON de clasificación:'}], 'model': 'llama-3.3-70b-versatile', 'max_tokens': 256, 'n': 1, 'reasoning_effort': None, 'reasoning_format': None, 'service_tier': 'on_demand', 'stop': None, 'stream': False, 'temperature': 1e-08}}
+2026-03-30 04:41:09 │ nexus.main                   │ INFO    │ 🚀 NEXUS v4.0 — Pipeline LIVE
+2026-03-30 04:41:09 │ groq._base_client            │ DEBUG   │ Sending HTTP Request: POST https://api.groq.com/openai/v1/chat/completions
+2026-03-30 04:41:09 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.groq.com' port=443 local_address=None timeout=None socket_options=None
+2026-03-30 04:41:09 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x76081716c250>
+2026-03-30 04:41:09 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x7608173163c0> server_hostname='api.groq.com' timeout=None
+2026-03-30 04:41:09 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x7608170617d0>
+2026-03-30 04:41:09 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:09 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:41:09 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:41:09 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:41:09 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:10 │ nexus.pipeline               │ INFO    │ 🔄 Pipeline main loop started
+2026-03-30 04:41:10 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Mon, 30 Mar 2026 04:41:10 GMT'), (b'Content-Type', b'application/json'), (b'Transfer-Encoding', b'chunked'), (b'Connection', b'keep-alive'), (b'Cache-Control', b'private, max-age=0, no-store, no-cache, must-revalidate'), (b'Server', b'cloudflare'), (b'vary', b'Origin'), (b'x-groq-region', b'msp'), (b'x-ratelimit-limit-requests', b'1000'), (b'x-ratelimit-limit-tokens', b'12000'), (b'x-ratelimit-remaining-requests', b'999'), (b'x-ratelimit-remaining-tokens', b'11585'), (b'x-ratelimit-reset-requests', b'1m26.4s'), (b'x-ratelimit-reset-tokens', b'2.075s'), (b'x-request-id', b'req_01kmygqcpketxsed4kcc9s5tfg'), (b'set-cookie', b'__cf_bm=bLgiQoXrrIWL9O9DGFn6Da6X7NDK4Twgfwfr10Pgpbo-1774845670.0420156-1.0.1.1-WTCfxN7.z12uCOUGqH18ix1F0vftYEb5NtPpSX0GmTnW26mZNnrB0q12EBnXJUbTMkuSfXIYnTo.V9NcjHYgxcKMCONKWotya8re.gqKCIFHJSslpKtuKL2auUkyd9Rc; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 30 Mar 2026 05:11:10 GMT'), (b'Strict-Transport-Security', b'max-age=15552000'), (b'cf-cache-status', b'DYNAMIC'), (b'Content-Encoding', b'gzip'), (b'CF-RAY', b'9e4470bdcfb28258-GYE'), (b'alt-svc', b'h3=":443"; ma=86400')])
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:41:10 │ groq._base_client            │ DEBUG   │ HTTP Response: POST https://api.groq.com/openai/v1/chat/completions "200 OK" Headers({'date': 'Mon, 30 Mar 2026 04:41:10 GMT', 'content-type': 'application/json', 'transfer-encoding': 'chunked', 'connection': 'keep-alive', 'cache-control': 'private, max-age=0, no-store, no-cache, must-revalidate', 'server': 'cloudflare', 'vary': 'Origin', 'x-groq-region': 'msp', 'x-ratelimit-limit-requests': '1000', 'x-ratelimit-limit-tokens': '12000', 'x-ratelimit-remaining-requests': '999', 'x-ratelimit-remaining-tokens': '11585', 'x-ratelimit-reset-requests': '1m26.4s', 'x-ratelimit-reset-tokens': '2.075s', 'x-request-id': 'req_01kmygqcpketxsed4kcc9s5tfg', 'set-cookie': '__cf_bm=bLgiQoXrrIWL9O9DGFn6Da6X7NDK4Twgfwfr10Pgpbo-1774845670.0420156-1.0.1.1-WTCfxN7.z12uCOUGqH18ix1F0vftYEb5NtPpSX0GmTnW26mZNnrB0q12EBnXJUbTMkuSfXIYnTo.V9NcjHYgxcKMCONKWotya8re.gqKCIFHJSslpKtuKL2auUkyd9Rc; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 30 Mar 2026 05:11:10 GMT', 'strict-transport-security': 'max-age=15552000', 'cf-cache-status': 'DYNAMIC', 'content-encoding': 'gzip', 'cf-ray': '9e4470bdcfb28258-GYE', 'alt-svc': 'h3=":443"; ma=86400'})
+2026-03-30 04:41:10 │ nexus.macro                  │ DEBUG   │ Redis MACRO_REGIME = RED
+2026-03-30 04:41:10 │ nexus.macro                  │ WARNING │ 🌐 MACRO REGIME CHANGE: GREEN → RED | F&G: 8 (Extreme Fear) | Miedo extremo | 2158ms
+2026-03-30 04:41:10 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': '1012300288', 'text': '🚨 *MACRO SHIFT*\n─────────────────\n📊 *Regime Change:* `GREEN` → 🔴 `RED`\n⚡ *Action:* HFT Engine PAUSED. No new trades.\n📋 *Reason:* Miedo extremo\n─────────────────\n⏱ 2026-03-29 23:41:10 GMT-5', 'parse_mode': <ParseMode.MARKDOWN>}`
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:41:10 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'909'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:41:10 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:41:10 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `sendMessage` finished with return value `{'message_id': 55, 'from': {'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot'}, 'chat': {'id': 1012300288, 'first_name': 'JCBV', 'username': 'johnbarzola593', 'type': 'private'}, 'date': 1774845670, 'text': '🚨 MACRO SHIFT\n─────────────────\n📊 Regime Change: GREEN → 🔴 RED\n⚡ Action: HFT Engine PAUSED. No new trades.\n📋 Reason: Miedo extremo\n─────────────────\n⏱ 2026-03-29 23:41:10 GMT-5', 'entities': [{'offset': 3, 'length': 11, 'type': 'bold'}, {'offset': 36, 'length': 14, 'type': 'bold'}, {'offset': 51, 'length': 5, 'type': 'code'}, {'offset': 62, 'length': 3, 'type': 'code'}, {'offset': 68, 'length': 7, 'type': 'bold'}, {'offset': 113, 'length': 7, 'type': 'bold'}]}`
+2026-03-30 04:41:37 │ nexus.main                   │ INFO    │ 🛑 Shutdown signal received.
+2026-03-30 04:41:37 │ nexus.main                   │ INFO    │ 🛑 Initiating graceful shutdown...
+2026-03-30 04:41:37 │ nexus.pipeline               │ INFO    │ 🛑 NEXUS Pipeline — Shutting down...
+2026-03-30 04:41:37 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': '1012300288', 'text': '🛑 *NEXUS v4.0 OFFLINE*\n─────────────────\n💼 *Trades today:* `0`\n📈 *Session P&L:* `+$0.00`\n🌐 *Venue:* `IQ_OPTION`\n─────────────────\n⏱ 2026-03-29 23:41:37 GMT-5', 'parse_mode': <ParseMode.MARKDOWN>}`
+2026-03-30 04:41:37 │ httpcore.connection          │ DEBUG   │ close.started
+2026-03-30 04:41:37 │ httpcore.connection          │ DEBUG   │ close.complete
+2026-03-30 04:41:37 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2026-03-30 04:41:38 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x760816d28b90>
+2026-03-30 04:41:38 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x76081ce887a0> server_hostname='api.telegram.org' timeout=5.0
+2026-03-30 04:41:38 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x760816f09cd0>
+2026-03-30 04:41:38 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:38 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:41:38 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:41:38 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:41:38 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:38 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:41:38 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'905'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:41:38 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:41:38 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:41:38 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:41:38 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:41:38 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `sendMessage` finished with return value `{'message_id': 56, 'from': {'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot'}, 'chat': {'id': 1012300288, 'first_name': 'JCBV', 'username': 'johnbarzola593', 'type': 'private'}, 'date': 1774845698, 'text': '🛑 NEXUS v4.0 OFFLINE\n─────────────────\n💼 Trades today: 0\n📈 Session P&L: +$0.00\n🌐 Venue: IQ_OPTION\n─────────────────\n⏱ 2026-03-29 23:41:37 GMT-5', 'entities': [{'offset': 3, 'length': 18, 'type': 'bold'}, {'offset': 43, 'length': 13, 'type': 'bold'}, {'offset': 57, 'length': 1, 'type': 'code'}, {'offset': 62, 'length': 12, 'type': 'bold'}, {'offset': 75, 'length': 6, 'type': 'code'}, {'offset': 85, 'length': 6, 'type': 'bold'}, {'offset': 92, 'length': 9, 'type': 'code'}]}`
+2026-03-30 04:41:38 │ nexus.macro                  │ INFO    │ 🌐 MacroAgent detenido.
+2026-03-30 04:41:38 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB desconectado.
+2026-03-30 04:41:38 │ nexus.pipeline               │ INFO    │ 🛑 NEXUS Pipeline — Shutdown complete | Trades: 0 | Venue: IQ_OPTION
+2026-03-30 04:41:38 │ nexus.main                   │ INFO    │ 🏁 NEXUS v4.0 — Session ended cleanly.
+2026-03-30 04:41:48 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:41:48 │ nexus.preflight              │ INFO    │   NEXUS v4.0 — Pre-Flight Health Checks
+2026-03-30 04:41:48 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:41:48 │ nexus.preflight              │ INFO    │   Venue: IQ_OPTION
+2026-03-30 04:41:48 │ nexus.preflight              │ INFO    │ 
+2026-03-30 04:41:48 │ nexus.preflight              │ INFO    │   ✅ Redis         → nexus-redis:6379
+2026-03-30 04:41:48 │ nexus.preflight              │ INFO    │   ✅ QuestDB       → nexus-questdb:8812
+2026-03-30 04:41:48 │ nexus.preflight              │ INFO    │   ✅ Telegram       → Token loaded (chat: 101230...)
+2026-03-30 04:41:48 │ nexus.preflight              │ INFO    │ 
+2026-03-30 04:41:48 │ nexus.preflight              │ INFO    │   Result: 3/3 checks passed
+2026-03-30 04:41:48 │ nexus.preflight              │ INFO    │ ============================================================
+2026-03-30 04:41:48 │ nexus.pipeline               │ INFO    │ 🚀 NEXUS Pipeline v4.0 — Initializing [IQ_OPTION]
+2026-03-30 04:41:48 │ nexus.pipeline               │ INFO    │ 🔴 Redis conectado (nexus-redis:6379)
+2026-03-30 04:41:48 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB PG pool conectado (nexus-questdb:8812)
+2026-03-30 04:41:48 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB ILP socket conectado (nexus-questdb:9009)
+2026-03-30 04:41:48 │ nexus.datalake               │ INFO    │ 🗄️ QuestDB schema verificado/creado (4 tablas)
+2026-03-30 04:41:48 │ nexus.macro                  │ INFO    │ 🌐 MacroAgent v4.0 iniciado — Intervalo: 1.0h | Provider: groq
+2026-03-30 04:41:48 │ nexus.pipeline               │ INFO    │ 📊 Signal Engine mode=binary
+2026-03-30 04:41:48 │ nexus.ml_engine              │ INFO    │ MLEngine: TensorFlow=True, SB3=False, sklearn=True
+2026-03-30 04:41:48 │ nexus.pipeline               │ INFO    │ 🛡️ QuantRiskManager inicializado
+2026-03-30 04:41:48 │ nexus.execution.iqoption     │ WARNING │ iqoptionapi no instalado. Ejecución IQ desactivada.
+2026-03-30 04:41:48 │ nexus.execution.factory      │ INFO    │ 🏭 Factory → IQOptionExecutionEngine instanciado
+2026-03-30 04:41:48 │ nexus.execution.iqoption     │ ERROR   │ iqoptionapi no instalado.
+2026-03-30 04:41:48 │ nexus.pipeline               │ WARNING │ ⚠️ Execution engine no conectado. Pipeline en modo dry-run.
+2026-03-30 04:41:48 │ nexus.pipeline               │ INFO    │ ✅ NEXUS Pipeline v4.0 — All 5 layers initialized [IQ_OPTION]
+   Config: {'signal_mode': 'binary', 'base_size': 1.0, 'max_size': 50.0, 'max_daily_trades': 3, 'min_confidence': 0.55, 'min_payout': 80, 'cooldown_between_trades_s': 300}
+2026-03-30 04:41:48 │ nexus.observability          │ INFO    │ 📊 Prometheus metrics server → http://0.0.0.0:9090/metrics
+2026-03-30 04:41:48 │ telegram.Bot                 │ DEBUG   │ Set Bot API URL: https://api.telegram.org/bot8755850491:AAEXjhGYs7lBqGUvAD45esKZuwGole_YXHI
+2026-03-30 04:41:48 │ telegram.Bot                 │ DEBUG   │ Set Bot API File URL: https://api.telegram.org/file/bot8755850491:AAEXjhGYs7lBqGUvAD45esKZuwGole_YXHI
+2026-03-30 04:41:48 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `getMe` with parameters `{}`
+2026-03-30 04:41:48 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2026-03-30 04:41:48 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x718a98e05750>
+2026-03-30 04:41:48 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x718a984fa720> server_hostname='api.telegram.org' timeout=5.0
+2026-03-30 04:41:49 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x718a9839b990>
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:49 │ groq._base_client            │ DEBUG   │ Request options: {'method': 'post', 'url': '/openai/v1/chat/completions', 'files': None, 'idempotency_key': 'stainless-python-retry-44abf89f-3e0a-4eff-b96a-5ce76beb72a3', 'json_data': {'messages': [{'role': 'system', 'content': 'Eres un analista macroeconómico institucional. Tu ÚNICO trabajo es clasificar\nel régimen de mercado actual en una de tres categorías basándote en los datos proporcionados.\n\nREGLAS ESTRICTAS:\n1. Responde SIEMPRE en JSON válido, sin texto adicional.\n2. El campo "regime" SOLO puede ser: "GREEN", "YELLOW" o "RED".\n3. "GREEN" = Mercado normal, baja volatilidad, sin eventos macro pendientes.\n4. "YELLOW" = Cautela, volatilidad moderada, eventos macro en 24h.\n5. "RED" = STOP total, evento de alto impacto activo (NFP, FOMC, CPI, Black Swan).\n6. El campo "reasoning" explica tu razonamiento en español (max 200 chars).\n7. El campo "fear_greed_adjustment" es un número entre -20 y +20 (ajuste fino).\n\nFormato JSON:\n{"regime": "GREEN|YELLOW|RED", "reasoning": "explicacion", "fear_greed_adjustment": 0}'}, {'role': 'user', 'content': 'Analiza el estado macro actual y clasifica el régimen:\n\n== FEAR & GREED INDEX ==\nScore: 8/100\nClassification: Extreme Fear\n\n== CONTEXTO TEMPORAL ==\nHora UTC: 2026-03-30 04:41 UTC\nDía de la semana: Monday\n\n== HISTORIAL DE REGÍMENES (últimas 6h) ==\n  Sin historial previo\n\nResponde SOLO con el JSON de clasificación:'}], 'model': 'llama-3.3-70b-versatile', 'max_tokens': 256, 'n': 1, 'reasoning_effort': None, 'reasoning_format': None, 'service_tier': 'on_demand', 'stop': None, 'stream': False, 'temperature': 1e-08}}
+2026-03-30 04:41:49 │ groq._base_client            │ DEBUG   │ Sending HTTP Request: POST https://api.groq.com/openai/v1/chat/completions
+2026-03-30 04:41:49 │ httpcore.connection          │ DEBUG   │ connect_tcp.started host='api.groq.com' port=443 local_address=None timeout=None socket_options=None
+2026-03-30 04:41:49 │ httpcore.connection          │ DEBUG   │ connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x718a92656810>
+2026-03-30 04:41:49 │ httpcore.connection          │ DEBUG   │ start_tls.started ssl_context=<ssl.SSLContext object at 0x718a928b4290> server_hostname='api.groq.com' timeout=None
+2026-03-30 04:41:49 │ httpcore.connection          │ DEBUG   │ start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x718a926568d0>
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:41:49 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'319'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:41:49 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:41:49 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `getMe` finished with return value `{'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot', 'can_join_groups': True, 'can_read_all_group_messages': False, 'supports_inline_queries': False, 'can_connect_to_business': False, 'has_main_web_app': False, 'has_topics_enabled': False, 'allows_users_to_create_topics': False}`
+2026-03-30 04:41:49 │ nexus.telegram               │ INFO    │ 📱 Telegram conectado: @NexusJCBV_bot
+2026-03-30 04:41:49 │ nexus.main                   │ INFO    │ 🎛️ OCP Dashboard LIVE on http://0.0.0.0:8000
+2026-03-30 04:41:49 │ nexus.main                   │ INFO    │ 🚀 NEXUS v4.0 — Pipeline LIVE
+2026-03-30 04:41:49 │ nexus.pipeline               │ INFO    │ 🔄 Pipeline main loop started
+2026-03-30 04:41:49 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Mon, 30 Mar 2026 04:41:50 GMT'), (b'Content-Type', b'application/json'), (b'Transfer-Encoding', b'chunked'), (b'Connection', b'keep-alive'), (b'Cache-Control', b'private, max-age=0, no-store, no-cache, must-revalidate'), (b'Server', b'cloudflare'), (b'vary', b'Origin'), (b'x-groq-region', b'msp'), (b'x-ratelimit-limit-requests', b'1000'), (b'x-ratelimit-limit-tokens', b'12000'), (b'x-ratelimit-remaining-requests', b'998'), (b'x-ratelimit-remaining-tokens', b'11585'), (b'x-ratelimit-reset-requests', b'2m52.8s'), (b'x-ratelimit-reset-tokens', b'2.075s'), (b'x-request-id', b'req_01kmygrkade1grsqx87kh37bb9'), (b'set-cookie', b'__cf_bm=te0l0G7wd22DrH6b3fVmighglw4y5U0JROuT44EDlNo-1774845709.5882707-1.0.1.1-6.f9Ftc5D5Xg2Gd5BSYIVMrxbinmMxrRcsyIR3YKZSE_HnCynvf8pJDTxqeTzpAtFZjf2P4SiN98ZasOrGbYmg5n1iqmtBsa2eLTq1Pzu0ctXmKuUblw5gSJ0fDoczSl; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 30 Mar 2026 05:11:50 GMT'), (b'Strict-Transport-Security', b'max-age=15552000'), (b'cf-cache-status', b'DYNAMIC'), (b'Content-Encoding', b'gzip'), (b'CF-RAY', b'9e4471b4eca69af8-GYE'), (b'alt-svc', b'h3=":443"; ma=86400')])
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:41:50 │ groq._base_client            │ DEBUG   │ HTTP Response: POST https://api.groq.com/openai/v1/chat/completions "200 OK" Headers({'date': 'Mon, 30 Mar 2026 04:41:50 GMT', 'content-type': 'application/json', 'transfer-encoding': 'chunked', 'connection': 'keep-alive', 'cache-control': 'private, max-age=0, no-store, no-cache, must-revalidate', 'server': 'cloudflare', 'vary': 'Origin', 'x-groq-region': 'msp', 'x-ratelimit-limit-requests': '1000', 'x-ratelimit-limit-tokens': '12000', 'x-ratelimit-remaining-requests': '998', 'x-ratelimit-remaining-tokens': '11585', 'x-ratelimit-reset-requests': '2m52.8s', 'x-ratelimit-reset-tokens': '2.075s', 'x-request-id': 'req_01kmygrkade1grsqx87kh37bb9', 'set-cookie': '__cf_bm=te0l0G7wd22DrH6b3fVmighglw4y5U0JROuT44EDlNo-1774845709.5882707-1.0.1.1-6.f9Ftc5D5Xg2Gd5BSYIVMrxbinmMxrRcsyIR3YKZSE_HnCynvf8pJDTxqeTzpAtFZjf2P4SiN98ZasOrGbYmg5n1iqmtBsa2eLTq1Pzu0ctXmKuUblw5gSJ0fDoczSl; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Mon, 30 Mar 2026 05:11:50 GMT', 'strict-transport-security': 'max-age=15552000', 'cf-cache-status': 'DYNAMIC', 'content-encoding': 'gzip', 'cf-ray': '9e4471b4eca69af8-GYE', 'alt-svc': 'h3=":443"; ma=86400'})
+2026-03-30 04:41:50 │ nexus.macro                  │ DEBUG   │ Redis MACRO_REGIME = RED
+2026-03-30 04:41:50 │ nexus.macro                  │ WARNING │ 🌐 MACRO REGIME CHANGE: GREEN → RED | F&G: 8 (Extreme Fear) | Miedo extremo, posible evento de alto impacto | 1805ms
+2026-03-30 04:41:50 │ telegram.Bot                 │ DEBUG   │ Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': '1012300288', 'text': '🚨 *MACRO SHIFT*\n─────────────────\n📊 *Regime Change:* `GREEN` → 🔴 `RED`\n⚡ *Action:* HFT Engine PAUSED. No new trades.\n📋 *Reason:* Miedo extremo, posible evento de alto impacto\n─────────────────\n⏱ 2026-03-29 23:41:50 GMT-5', 'parse_mode': <ParseMode.MARKDOWN>}`
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ send_request_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ send_request_headers.complete
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ send_request_body.started request=<Request [b'POST']>
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ send_request_body.complete
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ receive_response_headers.started request=<Request [b'POST']>
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Mon, 30 Mar 2026 04:41:50 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'941'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ receive_response_body.started request=<Request [b'POST']>
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ receive_response_body.complete
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ response_closed.started
+2026-03-30 04:41:50 │ httpcore.http11              │ DEBUG   │ response_closed.complete
+2026-03-30 04:41:50 │ telegram.Bot                 │ DEBUG   │ Call to Bot API endpoint `sendMessage` finished with return value `{'message_id': 57, 'from': {'id': 8755850491, 'is_bot': True, 'first_name': 'NexusTrader', 'username': 'NexusJCBV_bot'}, 'chat': {'id': 1012300288, 'first_name': 'JCBV', 'username': 'johnbarzola593', 'type': 'private'}, 'date': 1774845710, 'text': '🚨 MACRO SHIFT\n─────────────────\n📊 Regime Change: GREEN → 🔴 RED\n⚡ Action: HFT Engine PAUSED. No new trades.\n📋 Reason: Miedo extremo, posible evento de alto impacto\n─────────────────\n⏱ 2026-03-29 23:41:50 GMT-5', 'entities': [{'offset': 3, 'length': 11, 'type': 'bold'}, {'offset': 36, 'length': 14, 'type': 'bold'}, {'offset': 51, 'length': 5, 'type': 'code'}, {'offset': 62, 'length': 3, 'type': 'code'}, {'offset': 68, 'length': 7, 'type': 'bold'}, {'offset': 113, 'length': 7, 'type': 'bold'}]}`
+2026-03-30 04:42:49 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.
+2026-03-30 04:43:49 │ nexus.pipeline               │ WARNING │ 🔴 MACRO REGIME RED — No new trades.

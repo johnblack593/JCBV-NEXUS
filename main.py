@@ -31,6 +31,8 @@ import signal
 import sys
 from typing import Optional
 
+import uvicorn  # type: ignore
+
 # ── 0. Load .env FIRST (before any nexus imports) ────────────────
 from dotenv import load_dotenv
 
@@ -168,7 +170,7 @@ def preflight_checks() -> bool:
 # ══════════════════════════════════════════════════════════════════════
 
 async def run() -> None:
-    """Async entry point — initializes and runs the 5-layer pipeline."""
+    """Async entry point — initializes and runs the 5-layer pipeline + OCP Dashboard."""
     global logger
     logger = logging.getLogger("nexus.main")
 
@@ -199,6 +201,19 @@ async def run() -> None:
         await asyncio.sleep(2)  # Grace for Telegram dispatch
         return
 
+    # ── Launch OCP Dashboard (FastAPI on port 8000) ───────────────
+    dashboard_port = int(os.getenv("NEXUS_DASH_PORT", "8000"))
+    uvi_config = uvicorn.Config(
+        "nexus.dashboard.app:app",
+        host="0.0.0.0",
+        port=dashboard_port,
+        log_level="warning",
+        access_log=False,
+    )
+    uvi_server = uvicorn.Server(uvi_config)
+    dashboard_task = asyncio.create_task(uvi_server.serve())
+    logger.info(f"🎛️ OCP Dashboard LIVE on http://0.0.0.0:{dashboard_port}")
+
     # ── Run Pipeline ──────────────────────────────────────────────
     logger.info("🚀 NEXUS v4.0 — Pipeline LIVE")
 
@@ -208,7 +223,7 @@ async def run() -> None:
     # Wait for either pipeline to finish or shutdown signal
     shutdown_waiter = asyncio.create_task(shutdown_event.wait())
     done, pending = await asyncio.wait(
-        {pipeline_task, shutdown_waiter},
+        {pipeline_task, shutdown_waiter, dashboard_task},
         return_when=asyncio.FIRST_COMPLETED,
     )
 

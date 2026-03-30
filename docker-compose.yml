@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ═══════════════════════════════════════════════════════════════
   #  NEXUS HFT Core — Daemon de Trading Autónomo v4.0
@@ -11,6 +9,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - ENV=PRODUCTION
+    ports:
+      - "8000:8000"
     volumes:
       - ./logs:/app/logs
       - ./models:/app/models

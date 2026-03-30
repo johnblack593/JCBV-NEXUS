@@ -235,6 +235,22 @@ class TradesResponse(BaseModel):
 
 
 # ══════════════════════════════════════════════════════════════════════
+#  ENDPOINT: GET /
+# ══════════════════════════════════════════════════════════════════════
+
+@app.get("/", tags=["System"])
+async def read_root() -> Dict[str, Any]:
+    """Root endpoint providing basic API information."""
+    return {
+        "app": "NEXUS v4.0 Operational Control Panel (OCP)",
+        "status": "online",
+        "message": "Welcome to the NEXUS Headless API. Please use a client to authenticate or visit /docs.",
+        "docs_url": "/docs",
+        "health_check": "/health"
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════
 #  ENDPOINT: POST /login
 # ══════════════════════════════════════════════════════════════════════
 

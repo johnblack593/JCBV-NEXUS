@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-# NEXUS v4.0 — Production Dependencies
+# NEXUS v4.0 — Production Dependencies (CPU-Only)
 # Python 3.11 (Docker) / 3.13 (local dev)
 # ═══════════════════════════════════════════════════════════════
 # pip install -r nexus/requirements.txt
@@ -9,16 +9,18 @@
 python-binance>=1.0.19
 ccxt>=4.4.56
 websockets>=14.1
-# NOTE: iqoptionapi is installed from a local wheel or git source.
-# It is NOT available on PyPI with version >=7.0.2.
-# Install separately: pip install git+https://github.com/nicekdev/iqoptionapi.git
-# iqoptionapi  # manual install only
+# NOTE: iqoptionapi is installed from GitHub (not on PyPI >=7.x)
+# Installed separately in Dockerfile via:
+#   pip install git+https://github.com/nicekdev/iqoptionapi.git
 
-# Machine Learning & Deep Learning
-tensorflow>=2.18.0
-stable-baselines3>=2.4.1
-gymnasium>=1.2.3
+# Machine Learning & Deep Learning (CPU-ONLY — no NVIDIA/CUDA bloat)
+tensorflow-cpu>=2.18.0
 scikit-learn>=1.8.0
+# stable-baselines3 and gymnasium are optional RL dependencies.
+# They pull in PyTorch (~530MB GPU) so we install torch CPU-only
+# first via --extra-index-url in the Dockerfile.
+# stable-baselines3>=2.4.1
+# gymnasium>=1.2.3
 
 # LLM / NLP
 langchain>=0.3.0
@@ -71,5 +73,5 @@ PyJWT>=2.9.0
 redis>=5.2.1
 prometheus-client>=0.21.1
 
-# Development & Testing (not required in Docker production image)
+# Development & Testing (not needed in Docker)
 pytest>=8.3.4
