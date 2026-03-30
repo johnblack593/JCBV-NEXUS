@@ -1,14 +1,18 @@
-# NEXUS Trading System — Dependencies
-# Python 3.13
-
+# ═══════════════════════════════════════════════════════════════
+# NEXUS v4.0 — Production Dependencies
+# Python 3.11 (Docker) / 3.13 (local dev)
+# ═══════════════════════════════════════════════════════════════
 # pip install -r nexus/requirements.txt
-
+# ═══════════════════════════════════════════════════════════════
 
 # Exchange connectivity
 python-binance>=1.0.19
 ccxt>=4.4.56
 websockets>=14.1
-iqoptionapi>=7.0.2
+# NOTE: iqoptionapi is installed from a local wheel or git source.
+# It is NOT available on PyPI with version >=7.0.2.
+# Install separately: pip install git+https://github.com/nicekdev/iqoptionapi.git
+# iqoptionapi  # manual install only
 
 # Machine Learning & Deep Learning
 tensorflow>=2.18.0
@@ -67,7 +71,5 @@ PyJWT>=2.9.0
 redis>=5.2.1
 prometheus-client>=0.21.1
 
-# Development & Testing
+# Development & Testing (not required in Docker production image)
 pytest>=8.3.4
-pyright>=1.1.391
-pyre-check>=0.9.22

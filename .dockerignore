@@ -1,0 +1,19 @@
+# NEXUS v4.0 — Docker Build Exclusions
+.git
+.gitignore
+.venv
+.env
+.pytest_cache
+.agents
+__pycache__
+*.pyc
+*.db
+*.sqlite3
+logs/
+models/
+config/
+nexus/legacy/
+nexus/tests/
+nexus/dashboard/static/
+*.md
+LICENSE
