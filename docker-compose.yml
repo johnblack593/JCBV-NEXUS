@@ -9,6 +9,9 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - ENV=PRODUCTION
+      - TZ=${TZ:-America/Guayaquil}
+      - QUESTDB_REST_HOST=nexus-questdb
+      - QUESTDB_PG_HOST=nexus-questdb
     ports:
       - "8000:8000"
     volumes:
@@ -116,6 +119,9 @@ services:
     build:
       context: ./nexus-commander
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8000
+        VITE_WS_URL: ws://localhost:8000/ws
     container_name: nexus-commander-ui
     restart: unless-stopped
     ports:

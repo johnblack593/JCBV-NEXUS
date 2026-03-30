@@ -61,6 +61,11 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
         self._connected = False
         self._lock = asyncio.Lock()
 
+    @staticmethod
+    def _sanitize_asset(asset: str) -> str:
+        """Strip pipeline suffixes (-op) and normalize to IQ API format."""
+        return asset.replace("-op", "").replace("_", "").upper()
+
     # ── AbstractExecutionEngine Contract ──────────────────────────
 
     @property
@@ -118,9 +123,12 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
         if not await self.connect():
             return 0.0
 
+        asset_clean = self._sanitize_asset(asset)
         payouts = await asyncio.to_thread(self._api.get_all_profit)
         try:
-            val = payouts.get(asset, {}).get(option_type, 0)
+            # Try both raw and cleaned keys (IQ API is inconsistent)
+            data = payouts.get(asset_clean, payouts.get(asset, {}))
+            val = data.get(option_type, 0) if isinstance(data, dict) else 0
             if 0 < val < 1.0:
                 return float(val * 100)
             return float(val * 100 if val < 10 else val)
@@ -146,10 +154,11 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
         action = "call" if signal.direction in (SignalDirection.CALL, SignalDirection.BUY) else "put"
 
         # Validate payout
+        asset_clean = self._sanitize_asset(signal.asset)
         payout = await self.get_payout(signal.asset)
         if payout < self._min_payout:
             logger.warning(
-                f"⚠️ Payout {payout}% < {self._min_payout}% para {signal.asset}. REJECTED."
+                f"⚠️ Payout {payout}% < {self._min_payout}% para {asset_clean}. REJECTED."
             )
             return TradeResult(
                 order_id="N/A", venue=self.venue, asset=signal.asset,
@@ -159,7 +168,6 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
             )
 
         # Fire order
-        asset_clean = signal.asset.replace("-op", "")
         check, id_req = await asyncio.to_thread(
             self._api.buy, signal.size, asset_clean, action, signal.expiration_minutes
         )
@@ -200,6 +208,7 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
         if not await self.connect():
             return pd.DataFrame()
 
+        asset_clean = self._sanitize_asset(asset)
         size = self._TF_MAP.get(tf, 60)
         end_from_time = int(time.time())
         all_candles = []
@@ -208,7 +217,7 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
         while remaining > 0:
             batch_size = min(remaining, 1000)
             candles = await asyncio.to_thread(
-                self._api.get_candles, asset, size, batch_size, end_from_time
+                self._api.get_candles, asset_clean, size, batch_size, end_from_time
             )
             if not candles:
                 break

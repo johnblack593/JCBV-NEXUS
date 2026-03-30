@@ -385,8 +385,16 @@ async def get_trades(
             source="questdb",
         )
 
+    except (ConnectionRefusedError, OSError) as exc:
+        logger.debug(f"QuestDB not ready (startup race): {exc}")
+        return TradesResponse(
+            trades=[],
+            daily_pnl=0.0,
+            trade_count=0,
+            source="unavailable",
+        )
     except Exception as exc:
-        logger.warning(f"QuestDB offline or query failed: {exc}")
+        logger.debug(f"QuestDB offline or query failed: {exc}")
         return TradesResponse(
             trades=[],
             daily_pnl=0.0,
@@ -646,11 +654,15 @@ async def telemetry_ws(ws: WebSocket) -> None:
 # ══════════════════════════════════════════════════════════════════════
 
 # In-memory price simulator for dev/demo mode.
-# In production, replace this with Redis Pub/Sub from the data handler.
+# In production, pipeline publishes real ticks to Redis channel NEXUS:TICKS.
 _PRICE_STATE: Dict[str, float] = {
     "price": 1.08500,  # EUR/USD starting price
     "volume": 0.0,
 }
+
+# Monotonically increasing time counter for lightweight-charts
+# (each candle MUST have a strictly increasing `time` value)
+_TICK_COUNTER: Dict[str, int] = {"last_time": 0}
 
 
 def _generate_tick() -> Dict[str, Any]:
@@ -666,6 +678,12 @@ def _generate_tick() -> Dict[str, Any]:
     low = round(new_price - abs(random.gauss(0, 0.00008)), 5)
     vol = round(random.uniform(50, 500), 2)
 
+    # Ensure strictly increasing time (lightweight-charts requirement)
+    now_s = int(time.time())
+    if now_s <= _TICK_COUNTER["last_time"]:
+        now_s = _TICK_COUNTER["last_time"] + 1
+    _TICK_COUNTER["last_time"] = now_s
+
     return {
         "type": "price",
         "asset": "EURUSD",
@@ -674,29 +692,90 @@ def _generate_tick() -> Dict[str, Any]:
         "low": low,
         "close": new_price,
         "volume": vol,
+        "time": now_s,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def _try_redis_pubsub() -> Optional[Any]:
+    """Try to subscribe to real-time ticks from the pipeline via Redis Pub/Sub."""
+    try:
+        r = _get_redis()
+        r.ping()
+        ps = r.pubsub()
+        ps.subscribe("NEXUS:TICKS")
+        logger.info("📡 /ws/prices connected to Redis Pub/Sub channel NEXUS:TICKS")
+        return ps
+    except Exception:
+        logger.debug("/ws/prices falling back to simulator (Redis Pub/Sub unavailable)")
+        return None
 
 
 @app.websocket("/ws/prices")
 async def prices_ws(ws: WebSocket) -> None:
     """
     Live OHLCV price stream.
-    Emits a tick every 500ms for lightweight-charts integration.
-    In production, this reads from Redis Pub/Sub (data handler publishes ticks).
+    Priority: Redis Pub/Sub (real ticks from pipeline) → Brownian simulator.
+    Emits a tick every 1s for lightweight-charts integration.
     """
     await ws.accept()
     logger.info("WebSocket prices client connected")
 
+    # Attempt Redis Pub/Sub for real data
+    pubsub = await asyncio.to_thread(_try_redis_pubsub)
+
     try:
         while True:
-            tick = _generate_tick()
+            tick = None
+
+            # Try real data from Redis first
+            if pubsub:
+                try:
+                    msg = await asyncio.to_thread(pubsub.get_message, True, 0.1)
+                    if msg and msg["type"] == "message":
+                        import json as _json
+                        raw = msg["data"]
+                        data = _json.loads(raw.decode() if isinstance(raw, bytes) else raw)
+                        # Ensure required fields + monotonic time
+                        now_s = int(time.time())
+                        if now_s <= _TICK_COUNTER["last_time"]:
+                            now_s = _TICK_COUNTER["last_time"] + 1
+                        _TICK_COUNTER["last_time"] = now_s
+                        tick = {
+                            "type": "price",
+                            "asset": data.get("asset", "EURUSD"),
+                            "open": float(data.get("open", 0)),
+                            "high": float(data.get("high", 0)),
+                            "low": float(data.get("low", 0)),
+                            "close": float(data.get("close", 0)),
+                            "volume": float(data.get("volume", 0)),
+                            "time": now_s,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        }
+                except Exception:
+                    pass  # Degrade to simulator
+
+            # Fallback: simulator
+            if tick is None:
+                tick = _generate_tick()
+
             await ws.send_json(tick)
-            await asyncio.sleep(0.5)  # 2 ticks/second
+            logger.debug(
+                f"TICK → {tick['asset']} close={tick['close']} time={tick['time']}"
+            )
+            await asyncio.sleep(1)  # 1 tick/second
+
     except WebSocketDisconnect:
         logger.info("WebSocket prices client disconnected")
     except Exception as exc:
         logger.warning(f"WebSocket prices error: {exc}")
+    finally:
+        if pubsub:
+            try:
+                await asyncio.to_thread(pubsub.unsubscribe)
+                await asyncio.to_thread(pubsub.close)
+            except Exception:
+                pass
 
 
 # ══════════════════════════════════════════════════════════════════════

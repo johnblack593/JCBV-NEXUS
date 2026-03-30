@@ -121,6 +121,18 @@ class MacroAgent:
         self._regime_history: List[Dict[str, Any]] = []
         self._last_fear_greed: Dict[str, Any] = {}
 
+        # ── FORCE_MACRO_REGIME override for testing ──────────────────
+        self._force_regime: Optional[str] = os.getenv("FORCE_MACRO_REGIME", "").upper().strip() or None
+        if self._force_regime and self._force_regime in ("GREEN", "YELLOW", "RED"):
+            logger.warning(
+                f"⚠️ FORCE_MACRO_REGIME={self._force_regime} — "
+                f"Macro evaluation BYPASSED. Testing mode active."
+            )
+            self._current_regime = MacroRegime(self._force_regime)
+        elif self._force_regime:
+            logger.error(f"Invalid FORCE_MACRO_REGIME='{self._force_regime}'. Ignoring.")
+            self._force_regime = None
+
         # LLM providers (lazy import)
         self._llm_provider = os.getenv("LLM_PROVIDER", "groq").lower()
         self._llm_initialized = False
@@ -197,6 +209,14 @@ class MacroAgent:
 
     async def _evaluate_regime(self) -> None:
         """Pipeline completo de evaluación del régimen macro."""
+        # ── FORCE_MACRO_REGIME bypass ─────────────────────────────────
+        if self._force_regime:
+            forced = MacroRegime(self._force_regime)
+            self._current_regime = forced
+            await self._write_regime_to_redis(forced)
+            logger.debug(f"FORCE_MACRO_REGIME={self._force_regime} written to Redis")
+            return
+
         t_start = time.perf_counter()
 
         # Step 1: Fetch Fear & Greed Index
@@ -470,7 +490,11 @@ class MacroAgent:
             logger.error(f"Error writing regime to Redis: {exc}")
 
     async def get_regime_from_redis(self) -> MacroRegime:
-        """Lee MACRO_REGIME desde Redis."""
+        """Lee MACRO_REGIME desde Redis. Respeta FORCE_MACRO_REGIME."""
+        # Force override takes absolute priority
+        if self._force_regime:
+            return MacroRegime(self._force_regime)
+
         if not self.redis:
             return self._current_regime
 
