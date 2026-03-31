@@ -70,18 +70,37 @@ export default function PriceChart() {
     };
   }, []);
 
-  // Update data on new ticks
+  const lastRenderedTimeRef = useRef<number>(0);
+
+  // Initialize data and handle updates
   useEffect(() => {
     if (!seriesRef.current || ticks.length === 0) return;
 
-    const last = ticks[ticks.length - 1];
-    seriesRef.current.update(last as CandlestickData<any>);
+    const incomingLastTime = ticks[ticks.length - 1].time as number;
+
+    if (lastRenderedTimeRef.current === 0) {
+      // First time loading history or first live tick
+      try {
+        seriesRef.current.setData(ticks as CandlestickData<any>[]);
+        lastRenderedTimeRef.current = incomingLastTime;
+      } catch (err) {
+        console.error('LightweightCharts setData error:', err);
+      }
+    } else if (incomingLastTime > lastRenderedTimeRef.current) {
+      // New real-time tick
+      try {
+        seriesRef.current.update(ticks[ticks.length - 1] as CandlestickData<any>);
+        lastRenderedTimeRef.current = incomingLastTime;
+      } catch (err) {
+        console.error('LightweightCharts update error:', err);
+      }
+    }
   }, [ticks]);
 
   return (
-    <div className="glass-card p-4 flex flex-col h-full">
+    <div className="glass-card p-4 flex flex-col w-full h-full">
       {/* Chart Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 flex-shrink-0">
         <div className="flex items-center gap-3">
           <h3 className="text-sm font-semibold text-nexus-text">{asset || 'EURUSD'}</h3>
           <span className={`text-lg font-bold font-[family-name:var(--font-mono)] ${
@@ -97,7 +116,9 @@ export default function PriceChart() {
       </div>
 
       {/* Chart Container */}
-      <div ref={chartContainerRef} className="flex-1 min-h-0" />
+      <div className="relative flex-1 w-full min-h-[300px]">
+        <div ref={chartContainerRef} className="absolute inset-0" />
+      </div>
     </div>
   );
 }

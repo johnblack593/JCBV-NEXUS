@@ -37,23 +37,37 @@ export default function LogsPage() {
     return 'text-nexus-text-dim';
   };
 
+  const handleDownload = () => {
+    if (entries.length === 0) return;
+    const content = entries.map(e => e.line).join('\n');
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nexus_tearsheet_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="p-6 h-full flex flex-col gap-4 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-nexus-text">Logs & Tear Sheet</h1>
-          <p className="text-sm text-nexus-text-muted mt-0.5">
+          <h1 className="text-2xl font-bold text-nexus-text">Logs & Tear Sheet</h1>
+          <p className="text-sm text-nexus-text-muted mt-1">
             Live pipeline log stream • Institutional report generation
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           {/* Connection indicator */}
-          <div className="flex items-center gap-1.5 text-xs mr-3">
+          <div className="flex items-center gap-1.5 text-xs mr-3 font-semibold tracking-wider uppercase">
             {isConnected ? (
-              <Wifi className="w-3.5 h-3.5 text-nexus-green" />
+              <Wifi className="w-4 h-4 text-nexus-green animate-regime-pulse" />
             ) : (
-              <WifiOff className="w-3.5 h-3.5 text-nexus-red" />
+              <WifiOff className="w-4 h-4 text-nexus-red" />
             )}
             <span className={isConnected ? 'text-nexus-green' : 'text-nexus-red'}>
               {wsStatus}
@@ -62,20 +76,24 @@ export default function LogsPage() {
 
           <button
             onClick={clear}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-nexus-border
-                       text-xs text-nexus-text-muted hover:text-nexus-text hover:border-nexus-border-light
-                       transition-all duration-200"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-nexus-border
+                       text-sm text-nexus-text-muted hover:text-nexus-text hover:bg-nexus-surface-2 
+                       transition-colors font-medium cursor-pointer"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            Clear
+            <Trash2 className="w-4 h-4" />
+            Clear Buffer
           </button>
 
           <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg
-                       bg-nexus-cyan/10 border border-nexus-cyan/30 text-nexus-cyan
-                       text-xs font-medium hover:bg-nexus-cyan/20 transition-all duration-200"
+            onClick={handleDownload}
+            disabled={entries.length === 0}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold
+                       transition-all shadow-lg
+                       ${entries.length > 0 
+                         ? 'bg-nexus-cyan text-[#000000] hover:brightness-110 cursor-pointer' 
+                         : 'bg-nexus-surface-2 text-nexus-text-muted select-none cursor-not-allowed border border-nexus-border'}`}
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-4 h-4" />
             Generate Tear Sheet
           </button>
         </div>

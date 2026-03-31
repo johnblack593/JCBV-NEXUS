@@ -5,7 +5,7 @@
 
 import { create } from 'zustand';
 import { WSEngine } from '../lib/ws-engine';
-import { WS_ENDPOINTS } from '../lib/constants';
+import { WS_ENDPOINTS, ENDPOINTS } from '../lib/constants';
 import type { WSConnectionStatus, TelemetryFrame, PriceFrame, LogFrame, WSFrame } from '../types/ws';
 import type { MacroRegime } from '../types/api';
 
@@ -110,8 +110,35 @@ export const usePriceStore = create<PriceState>((set, get) => ({
   ticks: [],
   wsStatus: 'DISCONNECTED',
 
-  connect: () => {
+  connect: async () => {
     if (priceEngine) return;
+
+    // Fetch initial historical candles from QuestDB
+    try {
+      const token = localStorage.getItem('nexus_token');
+      if (token) {
+        const res = await fetch(`${ENDPOINTS.CANDLES}?asset=EURUSD&timeframe=1m&limit=100`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.candles && data.candles.length > 0) {
+            // deduplicate and ensure strictly ascending
+            let lastT = 0;
+            const validCandles = data.candles.filter((c: any) => {
+              if (c.time > lastT) {
+                lastT = c.time;
+                return true;
+              }
+              return false;
+            });
+            set({ ticks: validCandles, asset: data.asset });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch historical candles', err);
+    }
 
     priceEngine = new WSEngine({
       url: WS_ENDPOINTS.PRICES,

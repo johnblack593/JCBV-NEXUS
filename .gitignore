@@ -1,3 +1,54 @@
+# ── NEXUS v4.0 Institutional Gitignore ──────────────────────────────
 
-nexus/.env
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS Metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment and Secrets
 .env
+.env.*
+!.env.example
+nexus/.env
+
+# Local logs (Prevent large file GH errors)
+logs/
+*.log
+*.log.*
+
+# Models and ML Artifacts
+models/
+*.h5
+*.keras
+*.onnx
+*.pkl
+*.joblib
+
+# Database local storage
+data/
+*.sqlite
+*.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker local artifacts
+.docker_cache/
+
+# Python Virtual Environments
+venv/
+.venv/
+env/
+bin/
+lib/
+share/
+include/
+pyvenv.cfg

@@ -61,7 +61,7 @@ logger = logging.getLogger("nexus.dashboard")
 #  Configuration
 # ══════════════════════════════════════════════════════════════════════
 
-JWT_SECRET: str = os.getenv("NEXUS_JWT_SECRET", "nexus-v4-change-me-in-production")
+JWT_SECRET: str = os.getenv("NEXUS_JWT_SECRET", "nexus-v4-change-me-in-production-2026!")
 JWT_ALGORITHM: str = "HS256"
 JWT_EXPIRE_HOURS: int = 24
 
@@ -256,6 +256,22 @@ class TradesResponse(BaseModel):
     source: str
 
 
+class CandleRecord(BaseModel):
+    time: int
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
+class CandlesResponse(BaseModel):
+    asset: str
+    timeframe: str
+    candles: List[CandleRecord]
+    source: str
+
+
 # ══════════════════════════════════════════════════════════════════════
 #  ENDPOINT: GET /
 # ══════════════════════════════════════════════════════════════════════
@@ -334,7 +350,7 @@ async def get_trades(
     query = (
         f"SELECT order_id, venue, asset, direction, size, price, payout, "
         f"status, confidence, regime, timestamp "
-        f"FROM nexus_trades "
+        f"FROM trades "
         f"ORDER BY timestamp DESC "
         f"LIMIT {min(limit, 100)}"
     )
@@ -401,6 +417,76 @@ async def get_trades(
             trade_count=0,
             source="unavailable",
         )
+
+
+@app.get("/candles", response_model=CandlesResponse, tags=["Data"])
+async def get_candles(
+    asset: str = "EURUSD",
+    timeframe: str = "1m",
+    limit: int = 500,
+    user: str = Depends(get_current_user),
+) -> CandlesResponse:
+    """Gets historical OHLCV from QuestDB to prepopulate charts."""
+    import urllib.request
+    import urllib.parse
+    import json
+    from datetime import datetime
+    
+    query = (
+        f"SELECT timestamp, open, high, low, close, volume "
+        f"FROM candles "
+        f"WHERE asset = '{asset}' AND timeframe = '{timeframe}' "
+        f"ORDER BY timestamp DESC "
+        f"LIMIT {limit}"
+    )
+
+    try:
+        url = (
+            f"http://{QUESTDB_REST_HOST}:{QUESTDB_REST_PORT}/exec"
+            f"?query={urllib.parse.quote(query)}"
+        )
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+
+        columns = [col["name"] for col in data.get("columns", [])]
+        rows = data.get("dataset", [])
+        
+        # QuestDB returns reverse chronological, chart needs chronological
+        rows.reverse()
+
+        candles = []
+        for row in rows:
+            record = dict(zip(columns, row))
+            ts_str = str(record.get("timestamp", ""))
+            
+            # Parse QuestDB timestamp to int
+            try:
+                clean_ts = ts_str.split(".")[0] + "+00:00"
+                dt = datetime.fromisoformat(clean_ts.replace("Z", "+00:00"))
+                unix_time = int(dt.timestamp())
+            except ValueError:
+                unix_time = 0
+            
+            if unix_time > 0:
+                candles.append(CandleRecord(
+                    time=unix_time,
+                    open=float(record.get("open", 0.0)),
+                    high=float(record.get("high", 0.0)),
+                    low=float(record.get("low", 0.0)),
+                    close=float(record.get("close", 0.0)),
+                    volume=float(record.get("volume", 0.0))
+                ))
+
+        return CandlesResponse(
+            asset=asset,
+            timeframe=timeframe,
+            candles=candles,
+            source="questdb"
+        )
+    except Exception as exc:
+        logger.debug(f"/candles fetch failed: {exc}")
+        return CandlesResponse(asset=asset, timeframe=timeframe, candles=[], source="unavailable")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -721,8 +807,16 @@ async def prices_ws(ws: WebSocket) -> None:
     await ws.accept()
     logger.info("WebSocket prices client connected")
 
-    # Attempt Redis Pub/Sub for real data
-    pubsub = await asyncio.to_thread(_try_redis_pubsub)
+    # Send IMMEDIATE first tick so frontend gets data before any navigation
+    first_tick = _generate_tick()
+    await ws.send_json(first_tick)
+
+    # Attempt Redis Pub/Sub for real data (non-blocking)
+    pubsub = None
+    try:
+        pubsub = await asyncio.to_thread(_try_redis_pubsub)
+    except Exception:
+        pass
 
     try:
         while True:

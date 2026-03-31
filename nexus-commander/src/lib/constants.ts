@@ -24,6 +24,7 @@ export const ENDPOINTS = {
   LOGIN:          `${API_BASE}/login`,
   STATE:          `${API_BASE}/state`,
   TRADES:         `${API_BASE}/trades`,
+  CANDLES:        `${API_BASE}/candles`,
   HEALTH:         `${API_BASE}/health`,
   PANIC:          `${API_BASE}/panic`,
   PANIC_RESET:    `${API_BASE}/panic/reset`,

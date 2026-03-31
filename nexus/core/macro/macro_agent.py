@@ -470,22 +470,22 @@ class MacroAgent:
     # ══════════════════════════════════════════════════════════════════
 
     async def _write_regime_to_redis(self, regime: MacroRegime) -> None:
-        """Escribe MACRO_REGIME a Redis atómicamente."""
+        """Escribe MACRO_REGIME a Redis atómicamente (NEXUS: prefix)."""
         if not self.redis:
             return
 
         try:
-            # Write regime value
+            # Write regime value (NEXUS: prefix — shared contract with dashboard)
             await asyncio.to_thread(
-                self.redis.set, "MACRO_REGIME", regime.value
+                self.redis.set, "NEXUS:MACRO_REGIME", regime.value
             )
             # Write timestamp
             await asyncio.to_thread(
                 self.redis.set,
-                "MACRO_REGIME_UPDATED",
+                "NEXUS:MACRO_REGIME_UPDATED",
                 datetime.now(timezone.utc).isoformat(),
             )
-            logger.debug(f"Redis MACRO_REGIME = {regime.value}")
+            logger.debug(f"Redis NEXUS:MACRO_REGIME = {regime.value}")
         except Exception as exc:
             logger.error(f"Error writing regime to Redis: {exc}")
 
@@ -499,7 +499,7 @@ class MacroAgent:
             return self._current_regime
 
         try:
-            raw = await asyncio.to_thread(self.redis.get, "MACRO_REGIME")
+            raw = await asyncio.to_thread(self.redis.get, "NEXUS:MACRO_REGIME")
             if raw:
                 value = raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
                 return MacroRegime(value)

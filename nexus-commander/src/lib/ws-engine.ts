@@ -122,7 +122,14 @@ export class WSEngine {
     this.stopHeartbeat();
     this.clearReconnectTimer();
     if (this.ws) {
-      this.ws.close();
+      if (this.ws.readyState === WebSocket.CONNECTING) {
+        // If it's still connecting, wait for exactly open to close, suppressing browser error
+        this.ws.onopen = () => {
+          this.ws?.close();
+        };
+      } else {
+        this.ws.close();
+      }
       this.ws = null;
     }
     this.setStatus('DISCONNECTED');

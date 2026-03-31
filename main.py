@@ -57,8 +57,12 @@ def setup_logging() -> None:
 
     # File handler: persistent log
     os.makedirs("logs", exist_ok=True)
-    file_handler = logging.FileHandler(
-        "logs/nexus_session.log", encoding="utf-8"
+    from logging.handlers import RotatingFileHandler
+    file_handler = RotatingFileHandler(
+        "logs/nexus_session.log", 
+        encoding="utf-8", 
+        maxBytes=10*1024*1024,  # 10 MB per log
+        backupCount=5           # Keep last 5 logs
     )
     file_handler.setLevel(logging.DEBUG)
 

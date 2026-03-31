@@ -44,7 +44,7 @@ services:
       - nexus-net
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 3
@@ -59,9 +59,9 @@ services:
     container_name: nexus-questdb
     restart: unless-stopped
     ports:
-      - "9000:9000"   # Web Console + REST API
-      - "8812:8812"   # PostgreSQL wire protocol
-      - "9009:9009"   # InfluxDB Line Protocol (ILP) ingestion
+      - "9000:9000" # Web Console + REST API
+      - "8812:8812" # PostgreSQL wire protocol
+      - "9009:9009" # InfluxDB Line Protocol (ILP) ingestion
     volumes:
       - questdb-data:/var/lib/questdb
     environment:
@@ -131,12 +131,12 @@ services:
     networks:
       - nexus-net
 
-
 volumes:
   redis-data:
   prometheus-data:
   grafana-data:
   questdb-data:
+
 
 networks:
   nexus-net:
