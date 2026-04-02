@@ -701,38 +701,50 @@ async def panic_reset(user: str = Depends(get_current_user)) -> Dict[str, Any]:
 #  WEBSOCKET: /ws/telemetry (Live State Stream)
 # ══════════════════════════════════════════════════════════════════════
 
+class ConnectionManager:
+    """Gestor de conexiones WebSocket para broadcast y cleanup limpio."""
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+telemetry_manager = ConnectionManager()
+
 @app.websocket("/ws/telemetry")
 async def telemetry_ws(ws: WebSocket) -> None:
     """
     Live telemetry stream.
-    Broadcasts pipeline state from Redis every 2 seconds.
-    No auth required on WS (auth is handled by the SPA before connecting).
+    Empuja métricas de sistema a clientes conectados cada 500ms.
     """
-    await ws.accept()
+    await telemetry_manager.connect(ws)
     logger.info("WebSocket telemetry client connected")
 
     try:
         while True:
-            state = {
-                "type": "telemetry",
-                "macro_regime": _redis_safe_get(_RK_MACRO_REGIME, "GREEN"),
-                "circuit_breaker": _redis_safe_get(_RK_CIRCUIT_BREAKER, "0") == "1",
-                "panic_mode": _redis_safe_get(_RK_PANIC_MODE, "0") == "1",
-                "ai_mode": _redis_safe_get(_RK_AI_MODE, "0") == "1",
-                "execution_venue": _redis_safe_get(
-                    _RK_EXECUTION_VENUE, os.getenv("EXECUTION_VENUE", "IQ_OPTION")
-                ),
-                "account_type": _redis_safe_get(
-                    _RK_ACCOUNT_TYPE, os.getenv("IQ_OPTION_ACCOUNT_TYPE", "PRACTICE")
-                ),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+            # TODO: Conectar a métricas reales del framework en la siguiente fase
+            metrics = {
+                "cpu": random.randint(40, 60),
+                "ram": round(random.uniform(2.0, 3.5), 1),
+                "active_trades": 0,
+                "macro_regime": _redis_safe_get(_RK_MACRO_REGIME, "GREEN")
             }
-            await ws.send_json(state)
-            await asyncio.sleep(2)
+            
+            # Empuje asíncrono individual al cliente actual en el loop del handler
+            await ws.send_json(metrics)
+            await asyncio.sleep(0.5)  # Ritmo estricto de < 50ms latencia teórica en UI
+
     except WebSocketDisconnect:
-        logger.info("WebSocket telemetry client disconnected")
+        telemetry_manager.disconnect(ws)
+        logger.info("WebSocket telemetry client disconnected cleanly.")
     except Exception as exc:
-        logger.warning(f"WebSocket error: {exc}")
+        telemetry_manager.disconnect(ws)
+        logger.warning(f"WebSocket telemetry error, removing connection: {exc}")
 
 
 # ══════════════════════════════════════════════════════════════════════

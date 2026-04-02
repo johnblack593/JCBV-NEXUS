@@ -89,22 +89,39 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
             if self._connected and self._api and self._api.check_connect():
                 return True
 
-            logger.info(f"Conectando a IQ Option con {self._email}...")
-            self._api = IQ_Option(self._email, self._password)
+            attempt = 1
+            delay = 1.0
+            max_delay = 30.0
 
-            check, reason = await asyncio.to_thread(self._api.connect)
+            while True:
+                logger.info(f"Conectando a IQ Option con {self._email} (Intento {attempt})...")
+                self._api = IQ_Option(self._email, self._password)
 
-            if check:
-                self._connected = True
-                balance_mode = "PRACTICE" if self._account_type == "PRACTICE" else "REAL"
-                await asyncio.to_thread(self._api.change_balance, balance_mode)
-                logger.info(f"✅ IQ Option conectado [{balance_mode}]")
-                return True
-            else:
-                logger.error(f"❌ Fallo IQ Option: {reason}")
-                if reason == '2FA':
-                    logger.critical("2FA ACTIVADO — Enviar código SMS requerido.")
-                return False
+                check, reason = await asyncio.to_thread(self._api.connect)
+
+                if check:
+                    self._connected = True
+                    balance_mode = "PRACTICE" if self._account_type == "PRACTICE" else "REAL"
+                    await asyncio.to_thread(self._api.change_balance, balance_mode)
+                    logger.info(f"✅ IQ Option conectado [{balance_mode}]")
+                    return True
+                else:
+                    if reason == '2FA':
+                        logger.critical("2FA ACTIVADO — Enviar código SMS requerido. Abortando reconexión.")
+                        return False
+
+                    logger.warning(f"⚠️ Conexión fallida ({reason}). Reintentando en {delay}s...")
+                    await asyncio.sleep(delay)
+                    
+                    delay = min(delay * 2, max_delay)
+                    attempt += 1
+                    
+                    # Stop if we hit 30s backoff and fail repeatedly (limit arbitrary or let it try?)
+                    # Requirements say "Exponential Backoff (1s, 2s, 4s... max 30s)". 
+                    # If it meant indefinitely capping at 30s, we keep looping. Let's limit attempts to 10.
+                    if attempt > 10:
+                        logger.error(f"❌ Fallo IQ Option definitivo tras múltiples ataques: {reason}")
+                        return False
 
     async def disconnect(self) -> None:
         if self._api:
@@ -167,10 +184,36 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
                 latency_ms=(time.perf_counter() - t_start) * 1000,
             )
 
-        # Fire order
-        check, id_req = await asyncio.to_thread(
-            self._api.buy, signal.size, asset_clean, action, signal.expiration_minutes
-        )
+        # Fire order with auto-reconnect logic
+        try:
+            check, id_req = await asyncio.to_thread(
+                self._api.buy, signal.size, asset_clean, action, signal.expiration_minutes
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ Conexión perdida durante ejecución. Reiniciando motor IQ... Error: {e}")
+            self._connected = False
+            
+            # Intenta reconectar exactamente una vez INMEDIATAMENTE
+            if await self.connect():
+                try:
+                    check, id_req = await asyncio.to_thread(
+                        self._api.buy, signal.size, asset_clean, action, signal.expiration_minutes
+                    )
+                except Exception as e2:
+                    logger.error(f"❌ Falla definitiva en ejecución tras reconectar: {e2}")
+                    return TradeResult(
+                        order_id="N/A", venue=self.venue, asset=signal.asset,
+                        direction=signal.direction, status=ExecutionStatus.ERROR,
+                        size=signal.size, executed_price=0.0, payout=payout,
+                        latency_ms=(time.perf_counter() - t_start) * 1000,
+                    )
+            else:
+                return TradeResult(
+                    order_id="N/A", venue=self.venue, asset=signal.asset,
+                    direction=signal.direction, status=ExecutionStatus.ERROR,
+                    size=signal.size, executed_price=0.0, payout=payout,
+                    latency_ms=(time.perf_counter() - t_start) * 1000,
+                )
 
         latency = (time.perf_counter() - t_start) * 1000
 

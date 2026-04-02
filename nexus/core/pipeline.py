@@ -94,6 +94,7 @@ class NexusPipeline:
     def __init__(self) -> None:
         load_dotenv()
         self.venue = os.getenv("EXECUTION_VENUE", "IQ_OPTION").upper()
+        self.dry_run_mode = os.getenv("DRY_RUN", "False").lower() in ("true", "1", "yes")
 
         # Venue-specific config
         if self.venue == "IQ_OPTION":
@@ -375,24 +376,44 @@ class NexusPipeline:
         )
 
         # ── Step 12: Execute (Layer 5) ───────────────────────────────
-        # Telegram: Sniper Entry alert (fire-and-forget)
-        self.telegram.fire_sniper_entry(
-            asset=asset,
-            direction=direction.value,
-            size=size,
-            confidence=confidence,
-            venue=self.venue,
-            regime=regime.value,
-            reason=signal_result.get("reason", ""),
-        )
+        if self.dry_run_mode:
+            import time as _time
+            simulated_price = float(df["close"].iloc[-1])
+            logger.info(f"🟢 [DRY RUN] TRADE SIMULADO: {direction.value} {asset} a ${simulated_price:.4f} | Size: ${size:.2f} | Conf: {confidence:.2f}")
+            
+            result = TradeResult(
+                order_id=f"dry_run_{int(_time.time()*1000)}",
+                asset=asset,
+                direction=direction,
+                size=size,
+                status=ExecutionStatus.FILLED,
+                executed_price=simulated_price,
+                venue=VenueType[self.venue] if hasattr(VenueType, self.venue) else VenueType.IQ_OPTION,
+                commission=0.0,
+                latency_ms=10.0,
+                payout=85.0 if self.venue == "IQ_OPTION" else 0.0,  # Simulated payout
+                error_message=None
+            )
+            latency = 10.0
+        else:
+            # Telegram: Sniper Entry alert (fire-and-forget)
+            self.telegram.fire_sniper_entry(
+                asset=asset,
+                direction=direction.value,
+                size=size,
+                confidence=confidence,
+                venue=self.venue,
+                regime=regime.value,
+                reason=signal_result.get("reason", ""),
+            )
 
-        try:
-            result = await self.execution_engine.execute(trade_signal)
-        except Exception as exc:
-            logger.error(f"Execution failed: {exc}", exc_info=True)
-            self.telegram.fire_system_error(f"Execution failed: {exc}", module="execution_engine")
-            return
-        latency = (time.perf_counter() - t_start) * 1000
+            try:
+                result = await self.execution_engine.execute(trade_signal)
+            except Exception as exc:
+                logger.error(f"Execution failed: {exc}", exc_info=True)
+                self.telegram.fire_system_error(f"Execution failed: {exc}", module="execution_engine")
+                return
+            latency = (time.perf_counter() - t_start) * 1000
 
         self._log_execution(result, trade_signal, latency)
 

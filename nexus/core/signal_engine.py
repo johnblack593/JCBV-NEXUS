@@ -371,9 +371,9 @@ class NexusAlphaOscillatorCalculator:
 
     Lógica de scoring por capas (0.0 a 1.0):
       Capa 1 (0.40): Bollinger Band (2.0σ) — El precio toca o perfora una banda.
-      Capa 2 (0.30): RSI(7) Extremo — RSI < 35 (sobreventa) o RSI > 65 (sobrecompra).
+      Capa 2 (0.30): RSI(7) Extremo — RSI < 30 (sobreventa) o RSI > 70 (sobrecompra).
       Capa 3 (0.15): Price Action — Vela de rechazo (cierre contrario al wick extremo).
-      Capa 4 (0.15): Volumen — Volumen actual > 1.3x promedio (confirmación de interés).
+      Capa 4 (0.15): Volumen — Volumen actual >= 1.0x promedio (confirmación de interés).
 
     Si el score compuesto >= 0.55, emite STRONG_BUY o STRONG_SELL.
     Debajo de ese umbral, NEUTRAL.
@@ -425,24 +425,38 @@ class NexusAlphaOscillatorCalculator:
         if curr_low <= curr_lower:
             bull_score += 0.40
             bull_details.append(f"BB↓")
+            logger.debug("BULL_LAYER: BB↓ Hit (+0.40)")
         elif curr_close <= curr_lower * 1.001:
             bull_score += 0.25
             bull_details.append(f"BB↓Near")
+            logger.debug("BULL_LAYER: BB↓Near Hit (+0.25)")
+        else:
+            logger.debug("BULL_LAYER: BB Miss (0.00)")
 
-        if curr_rsi < 25:
+        if curr_rsi < 30:
             bull_score += 0.30
             bull_details.append(f"RSI({curr_rsi:.0f})")
-        elif curr_rsi < 35:
+            logger.debug(f"BULL_LAYER: RSI < 30 Hit (+0.30) - Value: {curr_rsi:.1f}")
+        elif curr_rsi < 40:
             bull_score += 0.20
             bull_details.append(f"RSI({curr_rsi:.0f})")
+            logger.debug(f"BULL_LAYER: RSI < 40 Hit (+0.20) - Value: {curr_rsi:.1f}")
+        else:
+            logger.debug(f"BULL_LAYER: RSI Miss (0.00) - Value: {curr_rsi:.1f}")
 
         if curr_close > curr_open:
             bull_score += 0.15
             bull_details.append("PA↑")
+            logger.debug("BULL_LAYER: PA↑ Hit (+0.15)")
+        else:
+            logger.debug("BULL_LAYER: PA Miss (0.00)")
 
-        if vol_ratio >= 1.3:
+        if vol_ratio >= 1.0:
             bull_score += 0.15
             bull_details.append(f"V({vol_ratio:.1f}x)")
+            logger.debug(f"BULL_LAYER: Volume >= 1.0 Hit (+0.15) - Ratio: {vol_ratio:.1f}x")
+        else:
+            logger.debug(f"BULL_LAYER: Volume Miss (0.00) - Ratio: {vol_ratio:.1f}x")
 
         # ── BEARISH: Precio tocó/perforó banda superior + RSI alto ──
         bear_score = 0.0
@@ -451,30 +465,44 @@ class NexusAlphaOscillatorCalculator:
         if curr_high >= curr_upper:
             bear_score += 0.40
             bear_details.append(f"BB↑")
+            logger.debug("BEAR_LAYER: BB↑ Hit (+0.40)")
         elif curr_close >= curr_upper * 0.999:
             bear_score += 0.25
             bear_details.append(f"BB↑Near")
+            logger.debug("BEAR_LAYER: BB↑Near Hit (+0.25)")
+        else:
+            logger.debug("BEAR_LAYER: BB Miss (0.00)")
 
-        if curr_rsi > 75:
+        if curr_rsi > 70:
             bear_score += 0.30
             bear_details.append(f"RSI({curr_rsi:.0f})")
-        elif curr_rsi > 65:
+            logger.debug(f"BEAR_LAYER: RSI > 70 Hit (+0.30) - Value: {curr_rsi:.1f}")
+        elif curr_rsi > 60:
             bear_score += 0.20
             bear_details.append(f"RSI({curr_rsi:.0f})")
+            logger.debug(f"BEAR_LAYER: RSI > 60 Hit (+0.20) - Value: {curr_rsi:.1f}")
+        else:
+            logger.debug(f"BEAR_LAYER: RSI Miss (0.00) - Value: {curr_rsi:.1f}")
 
         if curr_close < curr_open:
             bear_score += 0.15
             bear_details.append("PA↓")
+            logger.debug("BEAR_LAYER: PA↓ Hit (+0.15)")
+        else:
+            logger.debug("BEAR_LAYER: PA Miss (0.00)")
 
-        if vol_ratio >= 1.3:
+        if vol_ratio >= 1.0:
             bear_score += 0.15
             bear_details.append(f"V({vol_ratio:.1f}x)")
+            logger.debug(f"BEAR_LAYER: Volume >= 1.0 Hit (+0.15) - Ratio: {vol_ratio:.1f}x")
+        else:
+            logger.debug(f"BEAR_LAYER: Volume Miss (0.00) - Ratio: {vol_ratio:.1f}x")
 
         # ── Señal final ──
         direction = SignalDirection.NEUTRAL
         final_score = 0.0
         detail = f"Bull={bull_score:.2f} Bear={bear_score:.2f}"
-        TRIGGER = 0.70  # Óptimo: BB(0.40)+RSI_Panic(0.30)=0.70 → 55.8% WR en BTC 5m
+        TRIGGER = 0.55  # Óptimo: BB(0.40)+PA(0.15)=0.55 → Alpha Refactor
 
         if bull_score >= TRIGGER and bull_score > bear_score:
             direction = SignalDirection.STRONG_BUY

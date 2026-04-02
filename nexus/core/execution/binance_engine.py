@@ -209,12 +209,39 @@ class BinanceExecutionEngine(AbstractExecutionEngine):
 
         except Exception as exc:
             latency = (time.perf_counter() - t_start) * 1000
+            
+            # Rate Limit & IP Ban Checks
+            status_code = getattr(exc, 'status_code', None)
+            err_str = str(exc)
+            
+            if status_code in (429, 418) or "429" in err_str or "418" in err_str or "Too Many Requests" in err_str:
+                wait_time = 60
+                response = getattr(exc, 'response', None)
+                if response and hasattr(response, 'headers'):
+                    retry_after = response.headers.get("Retry-After")
+                    if retry_after and retry_after.isdigit():
+                        wait_time = int(retry_after)
+                
+                logger.critical(
+                    f"🛑 CRÍTICO: Binance Rate Limit alcanzado o Ban de IP (HTTP {status_code or '429/418'}). "
+                    f"Se recomienda pausa estricta de {wait_time}s."
+                )
+                
+                return TradeResult(
+                    order_id="N/A", venue=self.venue, asset=signal.asset,
+                    direction=signal.direction, status=ExecutionStatus.REJECTED,
+                    size=signal.size, executed_price=0.0,
+                    latency_ms=latency,
+                    error_message=f"Rate Limit / Ban. Wait recommended: {wait_time}s"
+                )
+
             logger.error(f"❌ Orden Binance fallida: {exc}")
             return TradeResult(
                 order_id="N/A", venue=self.venue, asset=signal.asset,
                 direction=signal.direction, status=ExecutionStatus.ERROR,
                 size=signal.size, executed_price=0.0,
                 latency_ms=latency,
+                error_message=str(exc)
             )
 
     # ── Binance-specific methods ──────────────────────────────────
