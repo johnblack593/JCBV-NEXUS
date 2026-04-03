@@ -69,6 +69,11 @@ class TradeSignal:
     limit_price: Optional[float] = None # Binance limit orders
     stop_loss: Optional[float] = None   # Binance SL
     take_profit: Optional[float] = None # Binance TP
+    # ── Active Trade Management (Institutional) ──────────────────
+    trailing_stop_activation: Optional[float] = None   # Price where trailing stop activates
+    trailing_stop_callback_pct: Optional[float] = None # Callback % for trailing stop (e.g. 0.5)
+    breakeven_trigger: Optional[float] = None          # Price to move SL to entry
+    time_exit_minutes: Optional[int] = None            # Max minutes to hold position
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 

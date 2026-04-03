@@ -152,6 +152,40 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
         except Exception:
             return 0.0
 
+    async def get_best_available_asset(self, min_payout: int = 80) -> Optional[str]:
+        """Itera todos los activos, filtra los suspendidos y devuelve el de mejor payout."""
+        if not await self.connect():
+            return None
+
+        try:
+            payouts = await asyncio.to_thread(self._api.get_all_profit)
+            
+            best_asset = None
+            best_payout = -1.0
+            
+            for asset, data in payouts.items():
+                if isinstance(data, dict):
+                    val = data.get("turbo", 0)
+                    if 0 < val < 1.0:
+                        payout_pct = float(val * 100)
+                    elif val > 0:
+                        payout_pct = float(val * 100 if val < 10 else val)
+                    else:
+                        payout_pct = 0.0
+
+                    if payout_pct >= min_payout and payout_pct > best_payout:
+                        # Añade sufijo -op para estandarización del Nexus pipeline
+                        best_asset = f"{asset}-op"
+                        best_payout = payout_pct
+
+            if best_asset:
+                logger.info(f"🔎 Scanner: Mejor activo detectado -> {best_asset} ({best_payout:.1f}%)")
+            return best_asset
+
+        except Exception as exc:
+            logger.error(f"Error escaneando mejores activos: {exc}")
+            return None
+
     async def execute(self, signal: TradeSignal) -> TradeResult:
         """
         Ejecuta una orden CALL/PUT en IQ Option Turbo.

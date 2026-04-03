@@ -49,6 +49,9 @@ from .signal_engine import TechnicalSignalEngine
 from .risk_manager import QuantRiskManager
 from .ml_engine import MLEngine
 from .observability import NexusMetrics
+from .strategies.base import BaseStrategy
+from .strategies.binary_ml_exotic import BinaryMLExoticStrategy
+from .strategies.crypto_quant_scalp import CryptoQuantScalpStrategy
 from nexus.reporting.telegram_reporter import TelegramReporter
 
 logger = logging.getLogger("nexus.pipeline")
@@ -91,6 +94,12 @@ class NexusPipeline:
         5. ExecutionEngine (Factory → IQ Option | Binance)
     """
 
+    # ── Strategy Factory Registry ──────────────────────────────────
+    _STRATEGY_REGISTRY: Dict[str, type] = {
+        "BINARY_ML": BinaryMLExoticStrategy,
+        "CRYPTO_SCALP": CryptoQuantScalpStrategy,
+    }
+
     def __init__(self) -> None:
         load_dotenv()
         self.venue = os.getenv("EXECUTION_VENUE", "IQ_OPTION").upper()
@@ -101,6 +110,22 @@ class NexusPipeline:
             self._config = dict(_IQ_OPTION_CONFIG)
         else:
             self._config = dict(_BINANCE_CONFIG)
+
+        # ── Strategy Factory (reads ACTIVE_STRATEGY env) ─────────
+        active_strategy_key = os.getenv("ACTIVE_STRATEGY", "").upper()
+
+        if not active_strategy_key:
+            # Auto-select based on venue if ACTIVE_STRATEGY not set
+            active_strategy_key = "BINARY_ML" if self.venue == "IQ_OPTION" else "CRYPTO_SCALP"
+
+        strategy_cls = self._STRATEGY_REGISTRY.get(active_strategy_key)
+        if strategy_cls is None:
+            raise ValueError(
+                f"ACTIVE_STRATEGY='{active_strategy_key}' no reconocido. "
+                f"Valores válidos: {list(self._STRATEGY_REGISTRY.keys())}"
+            )
+        self.strategy: BaseStrategy = strategy_cls()
+        logger.info(f"🧠 Strategy Factory → {self.strategy!r} (key={active_strategy_key})")
 
         # Infrastructure
         self.redis_client = None
@@ -219,6 +244,18 @@ class NexusPipeline:
         self._running = True
         logger.info("🔄 Pipeline main loop started")
 
+        # ── Briefing Inicial de Mercado ────────────────────────────────
+        if self.venue == "IQ_OPTION" and hasattr(self.execution_engine, "get_best_available_asset"):
+            try:
+                min_payout = self._config.get("min_payout", 80)
+                best_asset = await self.execution_engine.get_best_available_asset(min_payout)
+                if best_asset:
+                    payout = await self.execution_engine.get_payout(best_asset)
+                    regime = await self.get_macro_regime()
+                    self.telegram.fire_market_briefing(regime.value, best_asset, payout)
+            except Exception as exc:
+                logger.debug(f"Could not send market briefing: {exc}")
+
         while self._running:
             try:
                 await self._tick()
@@ -317,8 +354,8 @@ class NexusPipeline:
             except Exception:
                 pass  # AI Mode degradation — use current params
 
-        # ── Step 6b: Generate Signal (Layer 3) ────────────────────────
-        signal_result = self.signal_engine.generate_signal(df)
+        # ── Step 6b: Generate Signal (Strategy Pattern — Layer 3) ─────
+        signal_result = await self.strategy.analyze(df)
         signal_dir = signal_result.get("signal", "HOLD")
         confidence = signal_result.get("confidence", 0.0)
 
@@ -360,7 +397,7 @@ class NexusPipeline:
         if size <= 0:
             return
 
-        # ── Step 11: Build TradeSignal ───────────────────────────────
+        # ── Step 11: Build TradeSignal (with Active Trade Management) ─
         direction = self._map_signal_to_direction(signal_dir)
         trade_signal = TradeSignal(
             asset=asset,
@@ -369,6 +406,12 @@ class NexusPipeline:
             confidence=confidence,
             regime=regime.value,
             expiration_minutes=1 if self.venue == "IQ_OPTION" else 0,
+            stop_loss=signal_result.get("stop_loss"),
+            take_profit=signal_result.get("take_profit"),
+            trailing_stop_activation=signal_result.get("trailing_stop_activation"),
+            trailing_stop_callback_pct=signal_result.get("trailing_stop_callback_pct"),
+            breakeven_trigger=signal_result.get("breakeven_trigger"),
+            time_exit_minutes=signal_result.get("time_exit_minutes"),
             metadata={
                 "reason": signal_result.get("reason", ""),
                 "indicators": signal_result.get("indicators", {}),
@@ -475,24 +518,19 @@ class NexusPipeline:
         import pandas as pd
 
         if self.venue == "IQ_OPTION":
-            # IQ-specific assets optimized for Binary (high payout, high volatility)
-            assets = ["EURUSD-op", "GBPUSD-op", "EURJPY-op", "USDJPY-op"]
-
-            for asset in assets:
-                try:
-                    # Use IQ engine's built-in data method
-                    engine = self.execution_engine
-                    if hasattr(engine, "get_historical_data"):
+            min_payout = self._config.get("min_payout", 80)
+            engine = self.execution_engine
+            
+            if hasattr(engine, "get_best_available_asset"):
+                asset = await engine.get_best_available_asset(min_payout)
+                if asset:
+                    try:
                         df = await engine.get_historical_data(asset, "1m", 500)
                         if df is not None and len(df) >= 30:
-                            # Validate payout before spending compute
-                            payout = await engine.get_payout(asset)
-                            if payout >= self._config.get("min_payout", 80):
-                                return asset, df
-                except Exception as exc:
-                    logger.debug(f"Data fetch failed for {asset}: {exc}")
-                    continue
-
+                            return asset, df
+                    except Exception as exc:
+                        logger.debug(f"Data fetch failed for {asset}: {exc}")
+                        
             return None, pd.DataFrame()
 
         else:  # BINANCE

@@ -162,6 +162,27 @@ class TelegramReporter:
         await self._send(msg)
 
     # ══════════════════════════════════════════════════════════════════
+    #  EVENT 1.5: MARKET BRIEFING
+    # ══════════════════════════════════════════════════════════════════
+
+    def fire_market_briefing(self, macro_regime: str, best_asset: str, payout: float) -> None:
+        """Fire-and-forget: Resumen del mercado inicial / escaneo dinámico."""
+        self._fire(self._send_market_briefing(macro_regime, best_asset, payout))
+
+    async def _send_market_briefing(self, macro_regime: str, best_asset: str, payout: float) -> None:
+        regime_emoji = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴"}.get(macro_regime, "⚪")
+        msg = (
+            f"📰 *NEXUS Morning Briefing*\n"
+            f"─────────────────\n"
+            f"📊 *Macro:* {regime_emoji} `{macro_regime}`\n"
+            f"🏆 *Top Asset:* `{best_asset}`\n"
+            f"💰 *Payout:* `{payout:.1f}%`\n"
+            f"─────────────────\n"
+            f"⏱ {self._timestamp()}"
+        )
+        await self._send(msg)
+
+    # ══════════════════════════════════════════════════════════════════
     #  EVENT 2: CIRCUIT BREAKER
     # ══════════════════════════════════════════════════════════════════
 
@@ -233,7 +254,11 @@ class TelegramReporter:
             f"📊 *Regime:* `{regime}`\n"
         )
         if reason:
-            msg += f"📋 *Signal:* {reason[:100]}\n"
+            # Reemplazamos delimitadores comunes por saltos de línea para mostrar el breakdown en estilo lista
+            formatted_reason = reason.replace(' |', '\n  ▫️').replace(', ', '\n  ▫️')
+            if not formatted_reason.startswith('  ▫️'):
+                formatted_reason = f"  ▫️ {formatted_reason}"
+            msg += f"📋 *Breakdown:*\n{formatted_reason}\n"
         msg += f"─────────────────\n⏱ {self._timestamp()}"
 
         await self._send(msg)
