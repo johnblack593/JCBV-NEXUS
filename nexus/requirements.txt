@@ -9,8 +9,9 @@
 python-binance>=1.0.19
 ccxt>=4.4.56
 websockets>=14.1
-# iqoptionapi — community fork (verified alive: iqoptionapi/iqoptionapi)
-git+https://github.com/iqoptionapi/iqoptionapi.git@master
+# iqoptionapi — JCBV Modernized Edition v7.1.1 (zero busy-wait, TLS strict, thread-safe)
+# https://github.com/johnblack593/IQOP-API-JOHNBARZOLA
+git+https://github.com/johnblack593/IQOP-API-JOHNBARZOLA.git@main
 
 # Machine Learning & Deep Learning (CPU-ONLY — no NVIDIA/CUDA bloat)
 tensorflow-cpu>=2.18.0

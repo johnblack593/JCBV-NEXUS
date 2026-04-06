@@ -4,8 +4,14 @@ NEXUS v4.0 — IQ Option Execution Engine (Layer 5: Concrete)
 Implementación concreta del AbstractExecutionEngine para IQ Option.
 Modo "Trojan Horse": Sniper Mode, Flat Sizing $1, Binary Turbo 1m.
 
-Hereda de AbstractExecutionEngine y adapta la lógica existente de
-IQOptionManager + IQOptionExecutionEngine (v3) al contrato unificado.
+Powered by: JCBV Modernized API v7.1.1
+    - Zero busy-waiting (threading.Event)
+    - Strict TLS (verify=True enforced)
+    - Thread-safe (no global state)
+    - 120-min timeout protection (check_win_v4)
+    - Dynamic asset synchronization
+
+Repository: https://github.com/johnblack593/IQOP-API-JOHNBARZOLA
 """
 
 from __future__ import annotations
@@ -15,7 +21,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -31,23 +37,24 @@ from .base import (
 
 logger = logging.getLogger("nexus.execution.iqoption")
 
-# Dependencia comunitaria: The unofficial IQ Option wrapper
+# JCBV Modernized API — zero busy-wait, TLS strict, thread-safe
 try:
     from iqoptionapi.stable_api import IQ_Option
 except ImportError:
     IQ_Option = None
-    logger.warning("iqoptionapi no instalado. Ejecución IQ desactivada.")
+    logger.warning("iqoptionapi (JCBV Edition) no instalado. Ejecución IQ desactivada.")
 
 
 class IQOptionExecutionEngine(AbstractExecutionEngine):
     """
     Motor de ejecución para IQ Option Binary/Turbo Options.
-    
-    Responsabilidades:
-        - Conexión WebSocket vía iqoptionapi
+
+    Powered by JCBV Modernized API v7.1.1:
+        - Conexión WebSocket con TLS estricto
         - Ejecución CALL/PUT con validación de payout mínimo
         - Datos históricos OHLCV con paginación profunda
         - Balance PRACTICE/REAL según config
+        - P&L extraction via check_win_v4 (async, GIL-safe, timeout-protected)
     """
 
     def __init__(self) -> None:
@@ -81,7 +88,7 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
             return True
 
         if not IQ_Option:
-            logger.error("iqoptionapi no instalado.")
+            logger.error("iqoptionapi (JCBV Edition) no instalado.")
             return False
 
         async with self._lock:
@@ -103,7 +110,7 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
                     self._connected = True
                     balance_mode = "PRACTICE" if self._account_type == "PRACTICE" else "REAL"
                     await asyncio.to_thread(self._api.change_balance, balance_mode)
-                    logger.info(f"✅ IQ Option conectado [{balance_mode}]")
+                    logger.info(f"✅ IQ Option conectado [{balance_mode}] — JCBV API v{IQ_Option.__version__}")
                     return True
                 else:
                     if reason == '2FA':
@@ -112,23 +119,27 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
 
                     logger.warning(f"⚠️ Conexión fallida ({reason}). Reintentando en {delay}s...")
                     await asyncio.sleep(delay)
-                    
+
                     delay = min(delay * 2, max_delay)
                     attempt += 1
-                    
-                    # Stop if we hit 30s backoff and fail repeatedly (limit arbitrary or let it try?)
-                    # Requirements say "Exponential Backoff (1s, 2s, 4s... max 30s)". 
-                    # If it meant indefinitely capping at 30s, we keep looping. Let's limit attempts to 10.
+
                     if attempt > 10:
-                        logger.error(f"❌ Fallo IQ Option definitivo tras múltiples ataques: {reason}")
+                        logger.error(f"❌ Fallo IQ Option definitivo tras {attempt - 1} intentos: {reason}")
                         return False
 
     async def disconnect(self) -> None:
+        """Cierra la conexión WebSocket limpiamente (JCBV API tiene close())."""
         if self._api:
-            # iqoptionapi no tiene un close() limpio, pero limpiamos estado
-            self._connected = False
-            self._api = None
-            logger.info("IQ Option desconectado.")
+            try:
+                if hasattr(self._api, 'api') and hasattr(self._api.api, 'close'):
+                    await asyncio.to_thread(self._api.api.close)
+                    logger.info("IQ Option WebSocket cerrado limpiamente.")
+            except Exception as e:
+                logger.warning(f"Error cerrando WebSocket IQ: {e}")
+            finally:
+                self._connected = False
+                self._api = None
+                logger.info("IQ Option desconectado.")
 
     async def get_balance(self) -> float:
         if not await self.connect():
@@ -159,10 +170,10 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
 
         try:
             payouts = await asyncio.to_thread(self._api.get_all_profit)
-            
+
             best_asset = None
             best_payout = -1.0
-            
+
             for asset, data in payouts.items():
                 if isinstance(data, dict):
                     val = data.get("turbo", 0)
@@ -226,7 +237,7 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
         except Exception as e:
             logger.warning(f"⚠️ Conexión perdida durante ejecución. Reiniciando motor IQ... Error: {e}")
             self._connected = False
-            
+
             # Intenta reconectar exactamente una vez INMEDIATAMENTE
             if await self.connect():
                 try:
@@ -270,6 +281,43 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
                 size=signal.size, executed_price=0.0, payout=payout,
                 latency_ms=latency,
             )
+
+    # ── P&L Extraction (JCBV API Feature: check_win_v4) ──────────
+
+    async def check_trade_result(self, order_id: int) -> Tuple[Optional[str], Optional[float]]:
+        """
+        Extrae el resultado exacto de un trade binario (P&L).
+
+        Usa check_win_v4 de la JCBV API:
+            - Async-safe, GIL-safe
+            - Timeout inyectado de 120 min contra congelamientos
+            - Retorna (resultado, profit_exacto) o (None, None) en timeout
+
+        Args:
+            order_id: ID numérico del trade retornado por buy()
+
+        Returns:
+            Tuple[str, float]: ("win"|"loose"|"equal", profit_amount)
+            Tuple[None, None]: Si timeout o error
+        """
+        if not self._api:
+            logger.error("API no conectada para verificar resultado del trade.")
+            return None, None
+
+        try:
+            result, profit = await asyncio.to_thread(self._api.check_win_v4, order_id)
+            if result == "win":
+                logger.info(f"🟢 TRADE WON | Order #{order_id} | Profit: +${profit:.2f}")
+            elif result == "loose":
+                logger.info(f"🔴 TRADE LOST | Order #{order_id} | Loss: ${profit:.2f}")
+            elif result == "equal":
+                logger.info(f"⚪ TRADE TIE | Order #{order_id} | Capital devuelto")
+            else:
+                logger.warning(f"⚠️ TRADE TIMEOUT | Order #{order_id} | Sin resultado")
+            return result, profit
+        except Exception as e:
+            logger.error(f"Error verificando resultado del trade #{order_id}: {e}")
+            return None, None
 
     # ── Data Methods (IQ-specific) ────────────────────────────────
 
