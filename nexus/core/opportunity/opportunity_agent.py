@@ -113,6 +113,7 @@ class OpportunityAgent:
         self._last_best_asset: Optional[str] = None
         self._last_selection_ts: float = 0.0
         self._running: bool = False
+        self._redis_warned: bool = False
 
     async def start(self) -> None:
         """Launches the background selection loop."""
@@ -165,6 +166,9 @@ class OpportunityAgent:
         Calls _select_best_asset() and writes result to Redis.
         Handles all exceptions internally — never propagates to caller.
         """
+        await asyncio.sleep(10.0)  # Let execution engine connect fully
+        logger.debug("OpportunityAgent: startup delay complete, entering selection loop")
+        
         while self._running:
             try:
                 asset = await self._select_best_asset()
@@ -182,7 +186,9 @@ class OpportunityAgent:
                         except Exception as exc:
                             logger.debug(f"Redis set failed: {exc}")
                     else:
-                        logger.warning("OpportunityAgent: Redis unavailable. Using internal cache.")
+                        if not self._redis_warned:
+                            logger.warning("OpportunityAgent: Redis unavailable. Using internal cache.")
+                            self._redis_warned = True
             except asyncio.CancelledError:
                 break
             except Exception as exc:
@@ -269,10 +275,9 @@ class OpportunityAgent:
             for asset, payout in top_candidates:
                 try:
                     # Strip IQ option internal suffixes if we need to request properly from get_historical_data
-                    clean_asset = asset.replace("-op", "")
-                    # Usually get_historical_data uses the clean asset format
+                    clean = asset.replace("-op", "").replace("_", "").upper()
                     
-                    df = await self.execution_engine.get_historical_data(asset, "1m", 30)
+                    df = await self.execution_engine.get_historical_data(clean, "1m", 30)
                     if df is None or len(df) < 15:
                         continue
                         
