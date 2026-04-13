@@ -31,7 +31,7 @@ def get_execution_engine(force_venue: Optional[str] = None) -> AbstractExecution
     Factory que retorna la implementación correcta del motor de ejecución.
     
     Args:
-        force_venue: Override manual ("IQ_OPTION" | "BINANCE"). 
+        force_venue: Override manual ("IQ_OPTION"). 
                      Si es None, lee de EXECUTION_VENUE en .env.
     
     Returns:
