@@ -1,17 +1,17 @@
 """
-NEXUS v4.0 — Pipeline Orchestrator (FULL 5-LAYER WIRING)
+NEXUS v5.0 (beta) — Pipeline Orchestrator (5-LAYER WIRING)
 ==========================================================
 Orquestador institucional que ata las 5 capas del pipeline asíncrono.
 
     Layer 1: Data Lake (QuestDB — tick/candle/trade ingestion)
     Layer 2: Macro Filter (MacroAgent — LLM regime via Redis)
-    Layer 3: Micro Alpha (TechnicalSignalEngine + MLEngine)
+    Layer 3: Micro Alpha (TechnicalSignalEngine — strategy-driven)
     Layer 4: Risk Management (QuantRiskManager + Circuit Breaker)
     Layer 5: Execution (AbstractExecutionEngine via Factory)
 
-Dual-Mode Operation:
-    IQ_OPTION → NexusAlpha direct signal + Flat $1 sizing + Binary Turbo
-    BINANCE   → Multi-indicator consensus + Kelly dynamic sizing + Spot/Perps
+Active Venue: IQ_OPTION — NexusAlpha direct signal,
+    flat $1 progressive sizing, Binary Turbo execution.
+    (BITGET: scheduled for Phase 3)
 
 Principio: NINGUNA capa bloquea a otra. Todo fluye como eventos asíncronos.
 
@@ -47,7 +47,6 @@ from .macro.macro_agent import MacroAgent, MacroRegime
 from .data_lake.questdb_client import QuestDBClient
 from .signal_engine import TechnicalSignalEngine
 from .risk_manager import QuantRiskManager
-from .ml_engine import MLEngine
 from .observability import NexusMetrics
 from .strategies.base import BaseStrategy
 from .strategies.binary_ml_exotic import BinaryMLExoticStrategy
@@ -57,7 +56,7 @@ logger = logging.getLogger("nexus.pipeline")
 
 
 # ══════════════════════════════════════════════════════════════════════
-#  Constants per Venue
+#  Venue Configuration
 # ══════════════════════════════════════════════════════════════════════
 
 # IQ Option: Flat $1 sizing, binary mode alpha
@@ -71,26 +70,18 @@ _IQ_OPTION_CONFIG = {
     "cooldown_between_trades_s": 300,  # 5 min entre trades
 }
 
-_BINANCE_CONFIG = {
-    "signal_mode": "spot",          # Multi-indicator consensus
-    "max_daily_trades": 20,         # Market making frequency
-    "min_confidence": 0.65,         # Umbral estándar
-    "kelly_fraction_cap": 0.25,     # Kelly máximo
-    "risk_per_trade": 0.01,         # 1% del portafolio por trade
-}
-
 
 class NexusPipeline:
     """
-    Orquestador principal de NEXUS v4.0 — Full 5-Layer Wiring.
-    
+    Orquestador principal de NEXUS v5.0 — 5-Layer Wiring.
+
     Initialization order (dependency-correct):
         0. Redis           (shared state bus)
         1. QuestDB         (data lake)
         2. MacroAgent      (background cron → Redis MACRO_REGIME)
-        3. SignalEngine    (Alpha V3 — venue-aware)
-        4. RiskManager     (Circuit Breaker + Kelly)
-        5. ExecutionEngine (Factory → IQ Option | Binance)
+        3. SignalEngine    (Alpha — strategy-driven)
+        4. RiskManager     (Circuit Breaker)
+        5. ExecutionEngine (Factory → IQ Option)
     """
 
     # ── Strategy Factory Registry ──────────────────────────────────
@@ -104,18 +95,12 @@ class NexusPipeline:
         self.venue = os.getenv("EXECUTION_VENUE", "IQ_OPTION").upper()
         self.dry_run_mode = os.getenv("DRY_RUN", "False").lower() in ("true", "1", "yes")
 
-        # Venue-specific config
-        if self.venue == "IQ_OPTION":
-            self._config = dict(_IQ_OPTION_CONFIG)
-        else:
-            self._config = dict(_BINANCE_CONFIG)
+        # IQ Option is the only active venue in v5.0.
+        # Bitget config will be introduced in Phase 3 via the engine adapter.
+        self._config = dict(_IQ_OPTION_CONFIG)
 
         # ── Strategy Factory (reads ACTIVE_STRATEGY env) ─────────
-        active_strategy_key = os.getenv("ACTIVE_STRATEGY", "").upper()
-
-        if not active_strategy_key:
-            # Auto-select based on venue if ACTIVE_STRATEGY not set
-            active_strategy_key = "BINARY_ML" if self.venue == "IQ_OPTION" else "CRYPTO_SCALP"
+        active_strategy_key = os.getenv("ACTIVE_STRATEGY", "BINARY_ML").upper()
 
         strategy_cls = self._STRATEGY_REGISTRY.get(active_strategy_key)
         if strategy_cls is None:
@@ -133,7 +118,6 @@ class NexusPipeline:
         self.data_lake: Optional[QuestDBClient] = None
         self.macro_agent: Optional[MacroAgent] = None
         self.signal_engine: Optional[TechnicalSignalEngine] = None
-        self.ml_engine: Optional[MLEngine] = None
         self.risk_manager: Optional[QuantRiskManager] = None
         self.execution_engine: Optional[AbstractExecutionEngine] = None
         self.metrics: Optional[NexusMetrics] = None
@@ -148,7 +132,7 @@ class NexusPipeline:
 
     async def initialize(self) -> None:
         """Inicializa todas las capas en orden de dependencia."""
-        logger.info(f"🚀 NEXUS Pipeline v4.0 — Initializing [{self.venue}]")
+        logger.info(f"🚀 NEXUS Pipeline v5.0 — Initializing [{self.venue}]")
         self._session_start = datetime.now(timezone.utc)
 
         # ── Layer 0: Redis (shared state bus) ─────────────────────────
@@ -184,9 +168,6 @@ class NexusPipeline:
         self.signal_engine = TechnicalSignalEngine(mode=signal_mode)
         logger.info(f"📊 Signal Engine mode={signal_mode}")
 
-        # ML Engine for validation (Binance mode uses combined confidence)
-        self.ml_engine = MLEngine(model_dir="models")
-
         # ── Layer 4: Risk Management ──────────────────────────────────
         self.risk_manager = QuantRiskManager(log_dir="logs", redis_client=self.redis_client)
         logger.info("🛡️ QuantRiskManager inicializado")
@@ -202,7 +183,7 @@ class NexusPipeline:
             logger.warning("⚠️ Execution engine no conectado. Pipeline en modo dry-run.")
 
         logger.info(
-            f"✅ NEXUS Pipeline v4.0 — All 5 layers initialized [{self.venue}]\n"
+            f"✅ NEXUS Pipeline v5.0 — All 5 layers initialized [{self.venue}]\n"
             f"   Config: {self._config}"
         )
 
@@ -224,27 +205,19 @@ class NexusPipeline:
         """
         Main event loop — connects all 5 layers.
 
-        IQ_OPTION flow:
+        Flow:
             1. Check MACRO_REGIME (Layer 2)
-            2. Fetch OHLCV via IQ Option API
-            3. NexusAlpha direct signal (Layer 3)
+            2. Fetch OHLCV via execution engine
+            3. Strategy-driven signal generation (Layer 3)
             4. Circuit breaker check (Layer 4)
-            5. Execute CALL/PUT flat $1 (Layer 5)
-            6. Log to QuestDB + Prometheus
-
-        BINANCE flow:
-            1. Check MACRO_REGIME (Layer 2)
-            2. Fetch OHLCV from DataHandler/QuestDB (Layer 1)
-            3. Multi-indicator consensus + ML validation (Layer 3)
-            4. Kelly sizing + Risk gating + Circuit breaker (Layer 4)
-            5. Execute MARKET/LIMIT via DMA (Layer 5)
+            5. Execute CALL/PUT (Layer 5)
             6. Log to QuestDB + Prometheus
         """
         self._running = True
         logger.info("🔄 Pipeline main loop started")
 
         # ── Briefing Inicial de Mercado ────────────────────────────────
-        if self.venue == "IQ_OPTION" and hasattr(self.execution_engine, "get_best_available_asset"):
+        if hasattr(self.execution_engine, "get_best_available_asset"):
             try:
                 min_payout = self._config.get("min_payout", 80)
                 best_asset = await self.execution_engine.get_best_available_asset(min_payout)
@@ -265,8 +238,7 @@ class NexusPipeline:
                 self.telegram.fire_system_error(str(e), module="pipeline._tick")
                 await asyncio.sleep(5)
 
-            # Loop interval: IQ = 60s (sniper), Binance = 10s (higher freq)
-            tick_interval = 60 if self.venue == "IQ_OPTION" else 10
+            tick_interval = 60  # IQ Option sniper mode: one evaluation per minute.
             await asyncio.sleep(tick_interval)
 
     async def _tick(self) -> None:
@@ -319,19 +291,18 @@ class NexusPipeline:
             )
             return
 
-        # ── Step 3: Cooldown between trades (IQ Mode) ────────────────
-        if self.venue == "IQ_OPTION":
-            cooldown = self._config.get("cooldown_between_trades_s", 300)
-            elapsed = time.time() - self._last_trade_time
-            if elapsed < cooldown and self._last_trade_time > 0:
-                return  # Silent return — still in cooldown
+        # ── Step 3: Cooldown between trades ──────────────────────────
+        cooldown = self._config.get("cooldown_between_trades_s", 300)
+        elapsed = time.time() - self._last_trade_time
+        if elapsed < cooldown and self._last_trade_time > 0:
+            return  # Silent return — still in cooldown
 
         # ── Step 4: Check Circuit Breaker (Layer 4) ──────────────────
         if self.risk_manager and self.risk_manager.is_circuit_breaker_active():
             logger.warning("🚨 Circuit Breaker ACTIVO — No new trades.")
             return
 
-        # ── Step 5: Get Market Data (via IQ/Binance specific) ────────
+        # ── Step 5: Get Market Data ──────────────────────────────────
         asset, df = await self._get_market_data()
         if df is None or df.empty or len(df) < 30:
             return  # Insuficient data
@@ -361,24 +332,7 @@ class NexusPipeline:
         if signal_dir == "HOLD":
             return
 
-        # ── Step 7: ML Validation (Layer 3b — Binance only) ──────────
-        if self.venue == "BINANCE" and self.ml_engine:
-            ml_result = self.ml_engine.predict(df)
-            ml_direction = ml_result.get("combined_direction", "sideways")
-            ml_confidence = ml_result.get("combined_confidence", 0.0)
-
-            # Reject if ML disagrees with signal direction
-            if signal_dir == "BUY" and ml_direction == "down":
-                logger.info("🤖 ML rejects BUY (predicts down). HOLD.")
-                return
-            if signal_dir == "SELL" and ml_direction == "up":
-                logger.info("🤖 ML rejects SELL (predicts up). HOLD.")
-                return
-
-            # Blend confidences
-            confidence = (confidence * 0.6 + ml_confidence * 0.4)
-
-        # ── Step 8: Confidence Gate ──────────────────────────────────
+        # ── Step 7: Confidence Gate ──────────────────────────────────
         min_conf = self._config.get("min_confidence", 0.55)
         if confidence < min_conf:
             logger.debug(
@@ -386,17 +340,17 @@ class NexusPipeline:
             )
             return
 
-        # ── Step 9: Regime-Aware Adjustments ─────────────────────────
+        # ── Step 8: Regime-Aware Adjustments ─────────────────────────
         if regime == MacroRegime.YELLOW:
             confidence *= 0.8  # Reduce confidence 20%
             logger.info("🟡 YELLOW regime — confidence reduced 20%")
 
-        # ── Step 10: Position Sizing (Layer 4) ───────────────────────
+        # ── Step 9: Position Sizing (Layer 4) ────────────────────────
         size = await self._calculate_size(confidence, df)
         if size <= 0:
             return
 
-        # ── Step 11: Build TradeSignal (with Active Trade Management) ─
+        # ── Step 10: Build TradeSignal (with Active Trade Management) ─
         direction = self._map_signal_to_direction(signal_dir)
         trade_signal = TradeSignal(
             asset=asset,
@@ -404,7 +358,7 @@ class NexusPipeline:
             size=size,
             confidence=confidence,
             regime=regime.value,
-            expiration_minutes=1 if self.venue == "IQ_OPTION" else 0,
+            expiration_minutes=1,
             stop_loss=signal_result.get("stop_loss"),
             take_profit=signal_result.get("take_profit"),
             trailing_stop_activation=signal_result.get("trailing_stop_activation"),
@@ -417,12 +371,12 @@ class NexusPipeline:
             },
         )
 
-        # ── Step 12: Execute (Layer 5) ───────────────────────────────
+        # ── Step 11: Execute (Layer 5) ───────────────────────────────
         if self.dry_run_mode:
             import time as _time
             simulated_price = float(df["close"].iloc[-1])
             logger.info(f"🟢 [DRY RUN] TRADE SIMULADO: {direction.value} {asset} a ${simulated_price:.4f} | Size: ${size:.2f} | Conf: {confidence:.2f}")
-            
+
             result = TradeResult(
                 order_id=f"dry_run_{int(_time.time()*1000)}",
                 asset=asset,
@@ -430,10 +384,10 @@ class NexusPipeline:
                 size=size,
                 status=ExecutionStatus.FILLED,
                 executed_price=simulated_price,
-                venue=VenueType[self.venue] if hasattr(VenueType, self.venue) else VenueType.IQ_OPTION,
+                venue=VenueType.IQ_OPTION,
                 commission=0.0,
                 latency_ms=10.0,
-                payout=85.0 if self.venue == "IQ_OPTION" else 0.0,  # Simulated payout
+                payout=85.0,
                 error_message=None
             )
             latency = 10.0
@@ -459,7 +413,7 @@ class NexusPipeline:
 
         self._log_execution(result, trade_signal, latency)
 
-        # ── Step 13: Post-Execution ──────────────────────────────────
+        # ── Step 12: Post-Execution ──────────────────────────────────
         if result.status == ExecutionStatus.FILLED:
             self._daily_trades += 1
             self._last_trade_time = time.time()
@@ -489,7 +443,7 @@ class NexusPipeline:
                 venue=self.venue,
             )
 
-        # ── Step 14: Observability (Prometheus) ──────────────────────
+        # ── Step 13: Observability (Prometheus) ──────────────────────
         if self.metrics:
             self.metrics.record_trade(
                 venue=self.venue,
@@ -511,140 +465,66 @@ class NexusPipeline:
 
     async def _get_market_data(self) -> Tuple[Optional[str], Any]:
         """
-        Gets OHLCV data from the venue-specific source.
+        Delegates market data acquisition to the active execution engine.
         Returns (asset, DataFrame) or (None, empty DataFrame) on failure.
         """
         import pandas as pd
 
-        if self.venue == "IQ_OPTION":
-            min_payout = self._config.get("min_payout", 80)
-            engine = self.execution_engine
-            
-            if hasattr(engine, "get_best_available_asset"):
-                asset = await engine.get_best_available_asset(min_payout)
-                if asset:
-                    try:
-                        df = await engine.get_historical_data(asset, "1m", 500)
-                        if df is not None and len(df) >= 30:
-                            return asset, df
-                    except Exception as exc:
-                        logger.debug(f"Data fetch failed for {asset}: {exc}")
-                        
-            return None, pd.DataFrame()
+        min_payout = self._config.get("min_payout", 80)
+        engine = self.execution_engine
 
-        else:  # BINANCE
-            # Primary asset from config
-            from nexus.config.settings import trading_config
-            asset = trading_config.symbols[0] if trading_config.symbols else "BTCUSDT"
+        if hasattr(engine, "get_best_available_asset"):
+            asset = await engine.get_best_available_asset(min_payout)
+            if asset:
+                try:
+                    df = await engine.get_historical_data(asset, "1m", 500)
+                    if df is not None and len(df) >= 30:
+                        return asset, df
+                except Exception as exc:
+                    logger.debug(f"Data fetch failed for {asset}: {exc}")
 
-            # Try QuestDB first (Layer 1)
-            if self.data_lake and self.data_lake.is_connected:
-                df = await self.data_lake.query_candles(asset, "5m", 500)
-                if df is not None and len(df) >= 30:
-                    return asset, df
-
-            # Fallback to execution engine data
-            if hasattr(self.execution_engine, "get_historical_data"):
-                df = await self.execution_engine.get_historical_data(asset, "5m", 500)
-                if df is not None and len(df) >= 30:
-                    return asset, df
-
-            return None, pd.DataFrame()
+        return None, pd.DataFrame()
 
     # ══════════════════════════════════════════════════════════════════
-    #  Position Sizing (Dual-Mode)
+    #  Position Sizing
     # ══════════════════════════════════════════════════════════════════
 
     async def _calculate_size(self, confidence: float, df: Any) -> float:
         """
-        Venue-aware position sizing.
+        Progressive flat sizing for IQ Option.
 
-        IQ_OPTION: Flat $1 (Trojan Horse). When balance > $50, scale to $2.
-        BINANCE:   Fractional Kelly * ATR-adjusted * Confidence weighted.
+        $1 until balance >= $50, then $2 until $200, then $5.
+        Capped at max_size from config.
         """
-        if self.venue == "IQ_OPTION":
-            # Get current balance for scale check
-            try:
-                balance = await self.execution_engine.get_balance()
-            except Exception:
-                balance = 20.0
+        try:
+            balance = await self.execution_engine.get_balance()
+        except Exception:
+            balance = 20.0
 
-            base = self._config.get("base_size", 1.0)
-            max_size = self._config.get("max_size", 50.0)
+        base = self._config.get("base_size", 1.0)
+        max_size = self._config.get("max_size", 50.0)
 
-            # Progressive sizing: $1 until $50, then $2 until $200, etc.
-            if balance >= 200:
-                size = min(5.0, max_size)
-            elif balance >= 50:
-                size = min(2.0, max_size)
-            else:
-                size = base
+        # Progressive sizing: $1 until $50, then $2 until $200, etc.
+        if balance >= 200:
+            size = min(5.0, max_size)
+        elif balance >= 50:
+            size = min(2.0, max_size)
+        else:
+            size = base
 
-            return size
-
-        else:  # BINANCE — Full Kelly + ATR sizing
-            try:
-                balance = await self.execution_engine.get_balance()
-            except Exception:
-                balance = 10000.0
-
-            if not self.risk_manager or not self._returns_history:
-                # Default: 1% of balance
-                return balance * self._config.get("risk_per_trade", 0.01)
-
-            # Kelly sizing
-            import numpy as np
-            returns = np.array(self._returns_history)
-            wins = returns[returns > 0]
-            losses = returns[returns < 0]
-
-            if len(wins) >= 3 and len(losses) >= 3:
-                win_rate = len(wins) / len(returns)
-                avg_win = float(np.mean(wins))
-                avg_loss = float(np.mean(np.abs(losses)))
-
-                kelly_f = self.risk_manager.kelly_criterion(win_rate, avg_win, avg_loss)
-
-                # Scale kelly by confidence
-                sizing_pct = kelly_f * confidence
-
-                # ATR clamp (if available)
-                if len(df) >= 20 and "high" in df.columns and "low" in df.columns:
-                    atr = float(
-                        (df["high"] - df["low"]).rolling(14).mean().iloc[-1]
-                    )
-                    current_price = float(df["close"].iloc[-1])
-                    if atr > 0 and current_price > 0:
-                        atr_pct = self.risk_manager.atr_position_size(
-                            balance, atr, current_price
-                        )
-                        sizing_pct = min(sizing_pct, atr_pct / 100.0)
-
-                size = balance * sizing_pct
-                # Floor at $10, cap at 15% of balance
-                return max(10.0, min(size, balance * 0.15))
-            else:
-                # Not enough history: conservative 1%
-                return balance * 0.01
+        return size
 
     # ══════════════════════════════════════════════════════════════════
     #  Signal Direction Mapping
     # ══════════════════════════════════════════════════════════════════
 
     def _map_signal_to_direction(self, signal_str: str) -> SignalDirection:
-        """Maps signal engine output to venue-appropriate direction."""
-        if self.venue == "IQ_OPTION":
-            if signal_str == "BUY":
-                return SignalDirection.CALL
-            elif signal_str == "SELL":
-                return SignalDirection.PUT
-        else:  # BINANCE
-            if signal_str == "BUY":
-                return SignalDirection.BUY
-            elif signal_str == "SELL":
-                return SignalDirection.SELL
-
-        return SignalDirection.BUY  # fallback
+        """Maps signal engine output to IQ Option direction (CALL/PUT)."""
+        if signal_str == "BUY":
+            return SignalDirection.CALL
+        elif signal_str == "SELL":
+            return SignalDirection.PUT
+        return SignalDirection.CALL  # fallback
 
     # ══════════════════════════════════════════════════════════════════
     #  State Accessors

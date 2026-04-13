@@ -25,9 +25,9 @@ logger = logging.getLogger("nexus.execution.base")
 # ══════════════════════════════════════════════════════════════════════
 
 class VenueType(Enum):
-    """Venues de ejecución soportados por NEXUS v4.0."""
+    """Venues de ejecución soportados por NEXUS v5.0."""
     IQ_OPTION = "IQ_OPTION"
-    BINANCE = "BINANCE"
+    # BITGET will be registered here in Phase 3.
 
 
 class SignalDirection(Enum):
