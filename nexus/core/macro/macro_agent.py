@@ -1,18 +1,18 @@
 """
-NEXUS v4.0 — Macro Agent (Layer 2: LLM Macro Filter)
-=====================================================
+NEXUS v5.0 (beta) — Macro Agent (Layer 2: LLM Macro Filter)
+=============================================================
 Ejecuta clasificación macroeconómica como Background Task asíncrono.
-NUNCA entra en el loop de trading intradía (Regla de Oro v4.0).
+NUNCA entra en el loop de trading intradía (Regla de Oro v5.0).
 
 Responsabilidades:
     - CronJob asíncrono cada 1h (configurable).
     - Lee Fear & Greed Index vía API pública (alternative.me).
-    - Llama al LLM (Groq/Gemini) con headlines macro para clasificar régimen.
+    - Llama al LLM (Groq/Gemini) vía aiohttp (direct REST) para clasificar régimen.
     - Escribe MACRO_REGIME = "GREEN" | "YELLOW" | "RED" en Redis atómicamente.
     - Persiste cada cambio de régimen en QuestDB para análisis histórico.
 
-Failover inteligente:
-    1. LLM Groq (primario) → 2. LLM Gemini (failover) → 3. Heurístico puro.
+LLM providers: Groq (primary) + Gemini (fallback).
+Failover: LLM Router → Heurístico puro si ambos fallan.
 
 Si Redis no está disponible, mantiene el régimen en memoria local.
 """
@@ -110,6 +110,7 @@ class MacroAgent:
         interval_hours: float = 1.0,
         redis_client=None,
         questdb_client=None,
+        llm_router=None,
     ) -> None:
         load_dotenv()
         self.interval_hours = interval_hours
@@ -133,9 +134,12 @@ class MacroAgent:
             logger.error(f"Invalid FORCE_MACRO_REGIME='{self._force_regime}'. Ignoring.")
             self._force_regime = None
 
-        # LLM providers (lazy import)
-        self._llm_provider = os.getenv("LLM_PROVIDER", "groq").lower()
-        self._llm_initialized = False
+        # LLM Router (injected or self-initialized)
+        if llm_router is not None:
+            self._llm_router = llm_router
+        else:
+            from nexus.core.llm.llm_router import LLMRouter
+            self._llm_router = LLMRouter.get_instance()
 
         # Multi-key rotation (imported from settings)
         self._groq_keys: List[str] = []
@@ -370,55 +374,8 @@ class MacroAgent:
         score: int,
         classification: str,
     ) -> Optional[Dict[str, Any]]:
-        """Invoca un LLM provider específico vía LangChain."""
-        try:
-            from langchain_core.prompts import ChatPromptTemplate
-            from langchain_core.output_parsers import StrOutputParser
-        except ImportError:
-            logger.debug("LangChain not available for MacroAgent")
-            return None
-
-        # Build LLM instance
-        llm = None
-        if provider == "groq":
-            try:
-                from langchain_groq import ChatGroq
-                llm = ChatGroq(
-                    model="llama-3.3-70b-versatile",
-                    api_key=api_key,
-                    temperature=0.0,
-                    max_tokens=256,
-                    max_retries=0,
-                )
-            except ImportError:
-                return None
-        elif provider == "gemini":
-            try:
-                from langchain_google_genai import ChatGoogleGenerativeAI
-                llm = ChatGoogleGenerativeAI(
-                    model="gemini-1.5-flash",
-                    google_api_key=api_key,
-                    temperature=0.0,
-                    max_output_tokens=256,
-                    max_retries=0,
-                )
-            except ImportError:
-                return None
-
-        if llm is None:
-            return None
-
-        # Build chain
-        chain = (
-            ChatPromptTemplate.from_messages([
-                ("system", _MACRO_SYSTEM_PROMPT),
-                ("human", _MACRO_USER_PROMPT),
-            ])
-            | llm
-            | StrOutputParser()
-        )
-
-        # Build regime history string
+        """Invoca un LLM provider vía LLMRouter (aiohttp direct REST)."""
+        # Build the user prompt
         history_lines = []
         for entry in self._regime_history[-6:]:
             history_lines.append(
@@ -428,20 +385,23 @@ class MacroAgent:
 
         now = datetime.now(timezone.utc)
 
-        # Invoke in thread to not block event loop (LangChain is sync)
-        raw = await asyncio.to_thread(
-            chain.invoke,
-            {
-                "fear_greed_score": score,
-                "fear_greed_class": classification,
-                "utc_time": now.strftime("%Y-%m-%d %H:%M UTC"),
-                "day_of_week": now.strftime("%A"),
-                "regime_history": history_str,
-            },
+        full_prompt = (
+            f"{_MACRO_SYSTEM_PROMPT}\n\n"
+            + _MACRO_USER_PROMPT.format(
+                fear_greed_score=score,
+                fear_greed_class=classification,
+                utc_time=now.strftime("%Y-%m-%d %H:%M UTC"),
+                day_of_week=now.strftime("%A"),
+                regime_history=history_str,
+            )
         )
 
-        # Parse JSON response
-        return self._parse_llm_regime(raw)
+        response = await self._llm_router.complete(full_prompt, max_tokens=300)
+        if response is None:
+            logger.debug("LLM unavailable, returning None")
+            return None
+
+        return self._parse_llm_regime(response)
 
     def _parse_llm_regime(self, raw: str) -> Optional[Dict[str, Any]]:
         """Parsea la respuesta JSON del LLM."""
@@ -538,7 +498,6 @@ class MacroAgent:
         return {
             "regime": self._current_regime.value,
             "fear_greed": self._last_fear_greed,
-            "provider": self._llm_provider,
             "running": self._running,
             "history_len": len(self._regime_history),
             "interval_hours": self.interval_hours,
@@ -552,5 +511,5 @@ class MacroAgent:
         status = "RUNNING" if self._running else "STOPPED"
         return (
             f"<MacroAgent regime={self._current_regime.value} "
-            f"status={status} provider={self._llm_provider}>"
+            f"status={status}>"
         )
