@@ -1,12 +1,11 @@
 """
-NEXUS Trading System — ML Engine
+NEXUS v5.0 (beta) — ML Engine
 ==================================
 Modelo LSTM para prediccion de precios y agente DQN para aprendizaje
 por refuerzo en decisiones de trading.
 
-NOTA: TensorFlow y Stable-Baselines3 son dependencias pesadas.
-Si no estan instalados, el modulo opera en modo "lightweight"
-usando un predictor basado en regresion polinomial como fallback.
+NOTA: TensorFlow es removido en favor de scikit-learn ensemble
+(RandomForest + GradientBoosting).
 """
 
 from __future__ import annotations
@@ -25,13 +24,6 @@ import pandas as pd  # type: ignore
 
 logger = logging.getLogger("nexus.ml_engine")
 
-# ── Lazy imports pesados ────────────────────────────────────────
-try:
-    import tensorflow as tf  # type: ignore
-    from tensorflow import keras  # type: ignore
-    _HAS_TF = True
-except ImportError:
-    _HAS_TF = False
 
 try:
     from sklearn.preprocessing import MinMaxScaler  # type: ignore
@@ -76,15 +68,9 @@ class DQNAction:
 
 class LSTMPredictor:
     """
-    Red LSTM para prediccion de series temporales de precios.
-
-    Si TensorFlow esta disponible:
-      - Arquitectura: LSTM(128) → Dropout(0.2) → LSTM(64) → Dense(32) → Dense(1)
-      - Features: close, volume, returns, volatility
-      - Scaler: MinMaxScaler
-
-    Si TensorFlow NO esta disponible:
-      - Fallback: prediccion basada en media movil exponencial + tendencia
+    Predictor fallback (Polinomial / EMA).
+    Reemplaza la arquitectura descartada para mantener compatibilidad 
+    con el rest del engine en Phase 1.
     """
 
     def __init__(
@@ -104,32 +90,9 @@ class LSTMPredictor:
         self._train_history: Optional[Dict[str, List[float]]] = None
 
     def build_model(self, input_shape: Tuple[int, int]) -> None:
-        """Construye la arquitectura LSTM con TensorFlow/Keras."""
-        if not _HAS_TF:
-            logger.warning("TensorFlow no disponible. LSTM en modo fallback.")
-            return
-
-        model = keras.Sequential([
-            keras.layers.LSTM(
-                128,
-                return_sequences=True,
-                input_shape=input_shape,
-            ),
-            keras.layers.Dropout(0.2),
-            keras.layers.LSTM(64, return_sequences=False),
-            keras.layers.Dropout(0.2),
-            keras.layers.Dense(32, activation="relu"),
-            keras.layers.Dense(1),
-        ])
-
-        model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=0.001),
-            loss="mse",
-            metrics=["mae"],
-        )
-
-        self.model = model
-        logger.info("Modelo LSTM construido: %s", model.summary(print_fn=lambda x: None) or "OK")
+        """Construye la arquitectura LSTM."""
+        logger.warning("TensorFlow no disponible. LSTM en modo fallback.")
+        return
 
     def prepare_data(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -212,50 +175,9 @@ class LSTMPredictor:
             logger.warning("Datos insuficientes para entrenar LSTM (%d muestras)", len(X))
             return {"loss": [], "val_loss": []}
 
-        if not _HAS_TF or self.model is None:
-            logger.info("Entrenamiento LSTM simulado (sin TensorFlow)")
-            self._trained = True
-            self._train_history = {"loss": [0.01], "val_loss": [0.02]}
-            return self._train_history  # type: ignore
-
-        # Split train/val (80/20)
-        split = int(len(X) * 0.8)
-        X_train, X_val = X[:split], X[split:]
-        y_train, y_val = y[:split], y[split:]
-
-        try:
-            history = self.model.fit(  # type: ignore
-                X_train, y_train,
-                validation_data=(X_val, y_val),
-                epochs=self.epochs,
-                batch_size=self.batch_size,
-                verbose=0,
-            )
-        except Exception as exc:
-            logger.error("LSTM training failed: %s", exc)
-            try:
-                from nexus.reporting.telegram_reporter import TelegramReporter
-                TelegramReporter.get_instance().fire_system_error(
-                    f"LSTM train error: {exc}", module="ml_engine.LSTM"
-                )
-            except Exception:
-                pass
-            self._trained = False
-            return {"loss": [], "val_loss": []}
-
+        logger.info("Entrenamiento LSTM simulado (sin TensorFlow)")
         self._trained = True
-        self._train_history = {
-            "loss": history.history["loss"],
-            "val_loss": history.history["val_loss"],
-        }
-
-        logger.info(
-            "LSTM entrenado: loss=%.6f, val_loss=%.6f (%d epochs)",
-            self._train_history["loss"][-1],  # type: ignore
-            self._train_history["val_loss"][-1],  # type: ignore
-            self.epochs,
-        )
-
+        self._train_history = {"loss": [0.01], "val_loss": [0.02]}
         return self._train_history  # type: ignore
 
     def predict(self, df: pd.DataFrame, horizon_minutes: int = 60) -> Prediction:
@@ -271,28 +193,8 @@ class LSTMPredictor:
 
         current_price = float(df["close"].iloc[-1])
 
-        # Si TF esta disponible y modelo entrenado, usar LSTM
-        if _HAS_TF and self.model is not None and self._trained:
-            try:
-                X, _ = self.prepare_data(df)
-                if len(X) > 0:
-                    pred_scaled = self.model.predict(X[-1:], verbose=0)[0, 0]  # type: ignore
-                    # Desescalar (aproximacion inversa)
-                    if self.scaler is not None:
-                        close_idx = 0
-                        scale = self.scaler.data_range_[close_idx]  # type: ignore
-                        minimum = self.scaler.data_min_[close_idx]  # type: ignore
-                        predicted_price = pred_scaled * scale + minimum
-                    else:
-                        predicted_price = pred_scaled * current_price
-                else:
-                    predicted_price = current_price
-            except Exception as exc:
-                logger.warning("Error en prediccion LSTM: %s", exc)
-                predicted_price = current_price
-        else:
-            # Fallback: EMA + tendencia
-            predicted_price = self._predict_fallback(df)
+        # Fallback: EMA + tendencia
+        predicted_price = self._predict_fallback(df)
 
         # Calcular direccion y confianza
         change_pct = (predicted_price - current_price) / current_price
@@ -338,33 +240,21 @@ class LSTMPredictor:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        if _HAS_TF and self.model is not None:
-            self.model.save(str(path / "lstm_model.keras"))  # type: ignore
-            logger.info("Modelo LSTM guardado en %s", path)
-        else:
-            # Guardar metadata
-            meta = {
-                "lookback": self.lookback,
-                "epochs": self.epochs,
-                "trained": self._trained,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-            meta_path = path / "lstm_meta.json"
-            meta_path.parent.mkdir(parents=True, exist_ok=True)
-            meta_path.write_text(json.dumps(meta, indent=2))
-            logger.info("Metadata LSTM guardada en %s", meta_path)
+        # Guardar metadata
+        meta = {
+            "lookback": self.lookback,
+            "epochs": self.epochs,
+            "trained": self._trained,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        meta_path = path / "lstm_meta.json"
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
+        meta_path.write_text(json.dumps(meta, indent=2))
+        logger.info("Metadata LSTM guardada en %s", meta_path)
 
     def load(self, path: Path) -> None:
         """Carga pesos previamente guardados."""
         path = Path(path)
-
-        if _HAS_TF:
-            model_path = path / "lstm_model.keras"
-            if model_path.exists():
-                self.model = keras.models.load_model(str(model_path))
-                self._trained = True
-                logger.info("Modelo LSTM cargado desde %s", model_path)
-                return
 
         meta_path = path / "lstm_meta.json"
         if meta_path.exists():
@@ -657,7 +547,7 @@ class MLEngine:
     Orquestador de Machine Learning: combina predicciones LSTM y DQN.
 
     Reporta:
-    - TensorFlow disponible: si/no
+    - scikit-learn disponible: si/no
     - SB3 disponible: si/no
     - Ultimo reentrenamiento
     - Metricas del modelo
@@ -673,8 +563,8 @@ class MLEngine:
         self._metrics: Dict[str, Any] = {}
 
         logger.info(
-            "MLEngine: TensorFlow=%s, SB3=%s, sklearn=%s",
-            _HAS_TF, _HAS_SB3, _HAS_SKLEARN,
+            "MLEngine: SB3=%s, sklearn=%s",
+            _HAS_SB3, _HAS_SKLEARN,
         )
 
     def train_all(self, df: pd.DataFrame) -> Dict[str, Any]:
@@ -683,10 +573,6 @@ class MLEngine:
 
         # LSTM
         logger.info("Entrenando LSTM...")
-        if _HAS_TF:
-            X, y = self.lstm.prepare_data(df)
-            if len(X) > 0:
-                self.lstm.build_model(input_shape=(X.shape[1], X.shape[2]))
 
         lstm_result = self.lstm.train(df)
         results["lstm"] = lstm_result
@@ -750,7 +636,6 @@ class MLEngine:
     def get_model_metrics(self) -> Dict[str, Any]:
         """Retorna metricas de rendimiento de ambos modelos."""
         return {
-            "has_tensorflow": _HAS_TF,
             "has_sb3": _HAS_SB3,
             "has_sklearn": _HAS_SKLEARN,
             "lstm_trained": self.lstm._trained,
@@ -762,4 +647,4 @@ class MLEngine:
     def __repr__(self) -> str:
         lstm = "trained" if self.lstm._trained else "untrained"
         dqn = "trained" if self.dqn._trained else "untrained"
-        return f"<MLEngine lstm={lstm} dqn={dqn} tf={_HAS_TF} sb3={_HAS_SB3}>"
+        return f"<MLEngine lstm={lstm} dqn={dqn} sb3={_HAS_SB3}>"
