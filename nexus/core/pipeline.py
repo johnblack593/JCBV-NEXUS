@@ -43,6 +43,7 @@ from .execution.base import (
     TradeSignal,
     VenueType,
 )
+from .opportunity.opportunity_agent import OpportunityAgent
 from .macro.macro_agent import MacroAgent, MacroRegime
 from .data_lake.questdb_client import QuestDBClient
 from .signal_engine import TechnicalSignalEngine
@@ -119,6 +120,7 @@ class NexusPipeline:
         self.macro_agent: Optional[MacroAgent] = None
         self.signal_engine: Optional[TechnicalSignalEngine] = None
         self.risk_manager: Optional[QuantRiskManager] = None
+        self.opportunity_agent: Optional[OpportunityAgent] = None
         self.execution_engine: Optional[AbstractExecutionEngine] = None
         self.metrics: Optional[NexusMetrics] = None
 
@@ -179,6 +181,16 @@ class NexusPipeline:
             balance = await self.execution_engine.get_balance()
             self.risk_manager.update_portfolio(balance, [])
             logger.info(f"💰 Balance inicial: ${balance:.2f}")
+
+            # ── Layer 5b: Opportunity Agent (asset selection background loop) ─
+            self.opportunity_agent = OpportunityAgent(
+                execution_engine=self.execution_engine,
+                redis_client=self.redis_client,
+                interval_minutes=5.0,
+                min_payout=self._config.get("min_payout", 80),
+            )
+            await self.opportunity_agent.start()
+            logger.info("🔎 OpportunityAgent started (5 min interval)")
         else:
             logger.warning("⚠️ Execution engine no conectado. Pipeline en modo dry-run.")
 
@@ -217,10 +229,17 @@ class NexusPipeline:
         logger.info("🔄 Pipeline main loop started")
 
         # ── Briefing Inicial de Mercado ────────────────────────────────
-        if hasattr(self.execution_engine, "get_best_available_asset"):
+        if self.execution_engine:
             try:
                 min_payout = self._config.get("min_payout", 80)
-                best_asset = await self.execution_engine.get_best_available_asset(min_payout)
+                best_asset = None
+                
+                if self.opportunity_agent:
+                    best_asset = await self.opportunity_agent.get_best_asset()
+                    
+                if not best_asset and hasattr(self.execution_engine, "get_best_available_asset"):
+                    best_asset = await self.execution_engine.get_best_available_asset(min_payout)
+                    
                 if best_asset:
                     payout = await self.execution_engine.get_payout(best_asset)
                     regime = await self.get_macro_regime()
@@ -465,23 +484,31 @@ class NexusPipeline:
 
     async def _get_market_data(self) -> Tuple[Optional[str], Any]:
         """
-        Delegates market data acquisition to the active execution engine.
-        Returns (asset, DataFrame) or (None, empty DataFrame) on failure.
+        Retrieves the pre-selected best asset from OpportunityAgent
+        (Redis cache) and fetches its OHLCV data.
+
+        The asset selection is performed by OpportunityAgent in the
+        background — this method never calls get_best_available_asset()
+        or get_all_profit() directly.
         """
         import pandas as pd
 
-        min_payout = self._config.get("min_payout", 80)
-        engine = self.execution_engine
+        # Read pre-selected asset from OpportunityAgent
+        asset = None
+        if self.opportunity_agent:
+            asset = await self.opportunity_agent.get_best_asset()
 
-        if hasattr(engine, "get_best_available_asset"):
-            asset = await engine.get_best_available_asset(min_payout)
-            if asset:
-                try:
-                    df = await engine.get_historical_data(asset, "1m", 500)
-                    if df is not None and len(df) >= 30:
-                        return asset, df
-                except Exception as exc:
-                    logger.debug(f"Data fetch failed for {asset}: {exc}")
+        if not asset:
+            logger.debug("No asset available from OpportunityAgent. Skipping tick.")
+            return None, pd.DataFrame()
+
+        # Fetch OHLCV — only network call in the tick path
+        try:
+            df = await self.execution_engine.get_historical_data(asset, "1m", 500)
+            if df is not None and len(df) >= 30:
+                return asset, df
+        except Exception as exc:
+            logger.debug(f"Data fetch failed for {asset}: {exc}")
 
         return None, pd.DataFrame()
 
@@ -622,6 +649,9 @@ class NexusPipeline:
 
         if self.macro_agent:
             await self.macro_agent.stop()
+        
+        if self.opportunity_agent:
+            await self.opportunity_agent.stop()
         if self.execution_engine:
             await self.execution_engine.disconnect()
         if self.data_lake:
