@@ -53,15 +53,10 @@ def get_execution_engine(force_venue: Optional[str] = None) -> AbstractExecution
         _engine_instance = IQOptionExecutionEngine()
         logger.info("🏭 Factory → IQOptionExecutionEngine instanciado")
 
-    elif venue_str == VenueType.BINANCE.value:
-        from .binance_engine import BinanceExecutionEngine
-        _engine_instance = BinanceExecutionEngine()
-        logger.info("🏭 Factory → BinanceExecutionEngine instanciado")
-
     else:
         raise ValueError(
             f"EXECUTION_VENUE='{venue_str}' no reconocido. "
-            f"Valores válidos: IQ_OPTION, BINANCE"
+            f"Valores válidos: IQ_OPTION"
         )
 
     return _engine_instance
