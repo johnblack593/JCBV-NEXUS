@@ -1,77 +1,57 @@
 # ═══════════════════════════════════════════════════════════════
-# NEXUS v4.0 — Production Dependencies (CPU-Only)
-# Python 3.11 (Docker) / 3.13 (local dev)
+# NEXUS v5.0 (beta) — Production Dependencies
+# Python 3.11+ (Docker) | 3.13 (local dev)
 # ═══════════════════════════════════════════════════════════════
-# pip install -r nexus/requirements.txt
+# Installation:
+#   pip install -r nexus/requirements.txt
+# Scope: IQ Option primary venue. Bitget added in Phase 3 via ccxt.
+# LLM providers: Groq + Gemini via direct aiohttp REST (no SDK wrappers).
+# ML: scikit-learn ensemble only. TensorFlow is permanently removed.
 # ═══════════════════════════════════════════════════════════════
 
-# Exchange connectivity
-python-binance>=1.0.19
-ccxt>=4.4.56
-websockets>=14.1
-# iqoptionapi — JCBV Modernized Edition v7.1.1 (zero busy-wait, TLS strict, thread-safe)
-# https://github.com/johnblack593/IQOP-API-JOHNBARZOLA
+# ── Exchange Connectivity ─────────────────────────────────────────
+# IQ Option: JCBV Modernized Edition (zero busy-wait, TLS strict, async)
 git+https://github.com/johnblack593/IQOP-API-JOHNBARZOLA.git@main
 
-# Machine Learning & Deep Learning (CPU-ONLY — no NVIDIA/CUDA bloat)
-tensorflow-cpu>=2.18.0
-scikit-learn>=1.8.0
-# stable-baselines3 and gymnasium are optional RL dependencies.
-# They pull in PyTorch (~530MB GPU) so we install torch CPU-only
-# first via --extra-index-url in the Dockerfile.
-# stable-baselines3>=2.4.1
-# gymnasium>=1.2.3
+# ccxt: multi-exchange connectivity layer (Bitget, and future venues)
+ccxt>=4.4.56
 
-# LLM / NLP
-langchain>=0.3.0
-langchain-core>=0.3.0
-langchain-community>=0.3.0
-langchain-groq>=0.1.0
-langchain-google-genai>=2.0.0
-langchain-ollama>=0.2.0
-langchain-openai>=0.2.0
+# WebSocket transport (used by IQ Option API and future real-time feeds)
+websockets>=14.1
 
-# Data & Analysis
+# ── Async HTTP (LLM calls, external APIs) ────────────────────────
+# Direct REST client for Groq and Gemini APIs. Replaces all LangChain.
+aiohttp>=3.9.5
+aiohttp-retry>=2.8.3
+
+# ── Data & Quantitative Analysis ─────────────────────────────────
 pandas>=2.2.3
 numpy>=2.2.1
-ta>=0.11.0
 scipy>=1.15.1
-yfinance>=0.2.52
 
-# Database
-sqlalchemy>=2.0.36
-asyncpg>=0.30.0
+# Technical indicators (RSI, MACD, Bollinger, ATR, etc.)
+ta>=0.11.0
 
-# Telegram Bot
-python-telegram-bot>=21.9
+# ── Machine Learning (lightweight ensemble, CPU-only) ────────────
+# Powers the IQ Option signal confidence layer.
+# NOTE: TensorFlow is permanently removed from NEXUS v5.0.
+scikit-learn>=1.8.0
 
-# HTTP & Async
-requests>=2.32.3
-aiohttp>=3.11.11
+# ── Database & Persistence ───────────────────────────────────────
+sqlalchemy>=2.0.0
 
-# Utilities
-python-dotenv>=1.0.1
-pydantic>=2.10.4
-tenacity>=9.0.0
-psutil>=6.1.1
-tabulate>=0.9.0
-PyYAML>=6.0.2
+# ── State Bus & Caching ──────────────────────────────────────────
+redis>=5.2.0
 
-# Backtesting
-backtrader2>=1.9.76.123
-matplotlib>=3.10.0
-quantstats>=0.0.62
+# ── Observability ────────────────────────────────────────────────
+prometheus-client>=0.21.0
 
-# Scheduling
-schedule>=1.2.2
+# ── Reporting & Notifications ────────────────────────────────────
+python-telegram-bot>=21.0
 
-# Monitoring & Dashboard
-fastapi>=0.115.6
-uvicorn>=0.34.0
-python-multipart>=0.0.20
-PyJWT>=2.9.0
-redis>=5.2.1
-prometheus-client>=0.21.1
+# ── Configuration ────────────────────────────────────────────────
+python-dotenv>=1.0.0
 
-# Development & Testing (not needed in Docker)
-pytest>=8.3.4
+# ── Serialization & Utilities ────────────────────────────────────
+pydantic>=2.7.0
+python-dateutil>=2.9.0
