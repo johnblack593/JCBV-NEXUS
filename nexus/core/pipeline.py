@@ -51,7 +51,6 @@ from .ml_engine import MLEngine
 from .observability import NexusMetrics
 from .strategies.base import BaseStrategy
 from .strategies.binary_ml_exotic import BinaryMLExoticStrategy
-from .strategies.crypto_quant_scalp import CryptoQuantScalpStrategy
 from nexus.reporting.telegram_reporter import TelegramReporter
 
 logger = logging.getLogger("nexus.pipeline")
@@ -95,9 +94,9 @@ class NexusPipeline:
     """
 
     # ── Strategy Factory Registry ──────────────────────────────────
+    # TODO(Phase1): Registry will be extended with BitgetScalpStrategy in Phase 3
     _STRATEGY_REGISTRY: Dict[str, type] = {
         "BINARY_ML": BinaryMLExoticStrategy,
-        "CRYPTO_SCALP": CryptoQuantScalpStrategy,
     }
 
     def __init__(self) -> None:
