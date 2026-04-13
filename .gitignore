@@ -1,54 +1,57 @@
-# ── NEXUS v4.0 Institutional Gitignore ──────────────────────────────
+# ── NEXUS v5.0 Gitignore ────────────────────────────────────────────
 
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
+*.pyo
+.Python
+*.egg-info/
 
-# OS Metadata
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Runtime databases (never committed)
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs and reports (generated at runtime)
+nexus/logs/
+nexus/reports/
+nexus/data/
+
+# ML model artifacts (too large for git; use git-lfs or object storage)
+nexus/models/
+*.pkl
+*.joblib
+*.h5
+*.keras
+
+# IDE and tooling
+.vscode/settings.json
+.idea/
+.pyre_configuration
 .DS_Store
-Thumbs.db
-desktop.ini
 
-# Environment and Secrets
+# Environment secrets (CRITICAL: never commit API keys)
 .env
 .env.*
 !.env.example
-nexus/.env
 
-# Local logs (Prevent large file GH errors)
-logs/
-*.log
-*.log.*
-
-# Models and ML Artifacts
-models/
-*.h5
-*.keras
-*.onnx
-*.pkl
-*.joblib
-
-# Database local storage
-data/
-*.sqlite
-*.db
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
+# OS Metadata
+Thumbs.db
+desktop.ini
 
 # Docker local artifacts
 .docker_cache/
 
-# Python Virtual Environments
-venv/
-.venv/
-env/
-bin/
-lib/
-share/
-include/
-pyvenv.cfg
+# Other
+*.swp
+*.swo
+*$py.class
+*.onnx
+*.log
+*.log.*
+logs/
