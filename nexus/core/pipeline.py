@@ -51,6 +51,7 @@ from .risk_manager import QuantRiskManager
 from .observability import NexusMetrics
 from .strategies.base import BaseStrategy
 from .strategies.binary_ml_exotic import BinaryMLExoticStrategy
+from .strategies.bitget_trend_scalper import BitgetTrendScalperStrategy
 from nexus.reporting.telegram_reporter import TelegramReporter
 
 logger = logging.getLogger("nexus.pipeline")
@@ -86,9 +87,9 @@ class NexusPipeline:
     """
 
     # ── Strategy Factory Registry ──────────────────────────────────
-    # TODO(Phase1): Registry will be extended with BitgetScalpStrategy in Phase 3
     _STRATEGY_REGISTRY: Dict[str, type] = {
         "BINARY_ML": BinaryMLExoticStrategy,
+        "BITGET_TREND_SCALPER": BitgetTrendScalperStrategy,
     }
 
     def __init__(self) -> None:
@@ -257,7 +258,10 @@ class NexusPipeline:
                 self.telegram.fire_system_error(str(e), module="pipeline._tick")
                 await asyncio.sleep(5)
 
-            tick_interval = 60  # IQ Option sniper mode: one evaluation per minute.
+            if self.venue == "BITGET":
+                tick_interval = 300  # 5 min — aligns with BitgetTrendScalper 5m TF
+            else:
+                tick_interval = 60   # 1 min — IQ Option sniper mode
             await asyncio.sleep(tick_interval)
 
     async def _tick(self) -> None:

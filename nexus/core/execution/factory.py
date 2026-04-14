@@ -31,7 +31,7 @@ def get_execution_engine(force_venue: Optional[str] = None) -> AbstractExecution
     Factory que retorna la implementación correcta del motor de ejecución.
     
     Args:
-        force_venue: Override manual ("IQ_OPTION"). 
+        force_venue: Override manual ("IQ_OPTION", "BITGET"). 
                      Si es None, lee de EXECUTION_VENUE en .env.
     
     Returns:
@@ -53,10 +53,15 @@ def get_execution_engine(force_venue: Optional[str] = None) -> AbstractExecution
         _engine_instance = IQOptionExecutionEngine()
         logger.info("🏭 Factory → IQOptionExecutionEngine instanciado")
 
+    elif venue_str == VenueType.BITGET.value:
+        from .bitget_engine import BitgetExecutionEngine
+        _engine_instance = BitgetExecutionEngine()
+        logger.info("🏭 Factory → BitgetExecutionEngine instanciado")
+
     else:
         raise ValueError(
             f"EXECUTION_VENUE='{venue_str}' no reconocido. "
-            f"Valores válidos: IQ_OPTION"
+            f"Valores válidos: IQ_OPTION, BITGET"
         )
 
     return _engine_instance
