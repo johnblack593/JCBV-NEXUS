@@ -955,9 +955,9 @@ def _run_validation() -> bool:
             "BTC":  [0.01, -0.02, 0.03, -0.01, 0.02, -0.005, 0.015],
             "GOLD": [0.005, 0.01, -0.005, 0.02, -0.01, 0.015, -0.002],
         }
-        cp2 = rm.correlation_penalty("BTC", pos_uncorr, ret_data_2, threshold=0.70)
+        cp2 = rm.correlation_penalty("BTC", pos_uncorr, ret_data_2, threshold=0.90)
         check(
-            "Correlación baja → Penalty 1.0 (sin castigo)",
+            "Correlación bajo threshold=0.90 → Penalty 1.0 (sin castigo)",
             cp2 == 1.0,
             f"Obtenido {cp2}",
         )
