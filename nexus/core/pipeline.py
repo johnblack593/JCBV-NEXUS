@@ -649,12 +649,28 @@ class NexusPipeline:
     # ══════════════════════════════════════════════════════════════════
 
     def _map_signal_to_direction(self, signal_str: str) -> SignalDirection:
-        """Maps signal engine output to IQ Option direction (CALL/PUT)."""
-        if signal_str == "BUY":
-            return SignalDirection.CALL
-        elif signal_str == "SELL":
-            return SignalDirection.PUT
-        return SignalDirection.CALL  # fallback
+        """
+        Mapea la señal de la estrategia a la dirección de ejecución.
+
+        IQ Option (binarios): CALL / PUT
+        Bitget (futuros):     BUY  / SELL
+
+        Razón: los exchanges de futuros no entienden CALL/PUT.
+        Si se envía CALL a Bitget, la orden será rechazada.
+        """
+        if self.venue == "BITGET":
+            if signal_str == "BUY":
+                return SignalDirection.BUY
+            elif signal_str == "SELL":
+                return SignalDirection.SELL
+            return SignalDirection.BUY  # fallback seguro para futuros
+        else:
+            # IQ Option: binary direction
+            if signal_str == "BUY":
+                return SignalDirection.CALL
+            elif signal_str == "SELL":
+                return SignalDirection.PUT
+            return SignalDirection.CALL  # fallback seguro para binarios
 
     # ══════════════════════════════════════════════════════════════════
     #  State Accessors
