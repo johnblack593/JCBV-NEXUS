@@ -254,6 +254,9 @@ class NexusPipeline:
         self._running = True
         logger.info("🔄 Pipeline main loop started")
 
+        # ── Daily Reset Scheduler ─────────────────────────────────────
+        asyncio.create_task(self._daily_reset_loop(), name="daily_reset")
+
         if self.macro_agent:
             logger.info("Agent => Macro cron loop is already started (Layer 2).")
             
@@ -355,10 +358,29 @@ class NexusPipeline:
         if elapsed < cooldown and self._last_trade_time > 0:
             return  # Silent return — still in cooldown
 
+        # Actualizar portfolio antes de consultar circuit breaker
+        if self.risk_manager and self.execution_engine:
+            try:
+                current_balance = await self.execution_engine.get_balance()
+                self.risk_manager.update_portfolio(current_balance, [])
+            except Exception:
+                pass  # No bloquear el tick si falla el balance fetch
+
         # ── Step 4: Check Circuit Breaker (Layer 4) ──────────────────
         if self.risk_manager and self.risk_manager.is_circuit_breaker_active():
             logger.warning("🚨 Circuit Breaker ACTIVO — No new trades.")
             return
+
+        # ── Step 4b: Max Exposure Check (Layer 4) ────────────────────
+        if self.risk_manager:
+            allowed = self.risk_manager.max_exposure_check(
+                proposed_pct=self._config.get("base_size", 1.0)
+                / max(await self._safe_get_balance(), 1.0)
+                * 100.0
+            )
+            if allowed == 0.0:
+                logger.warning("🛡️ max_exposure_check: exposición total bloqueada — skipping tick.")
+                return
 
         # ── Step 5: Get Market Data ──────────────────────────────────
         asset, df = await self._get_market_data()
@@ -482,9 +504,18 @@ class NexusPipeline:
             await self._persist_trade(result, trade_signal)
 
             # Update risk tracking
-            if result.payout > 0:
-                # IQ Option: log the trade return
-                self._returns_history.append(result.payout / 100.0)
+            # Retorno real del trade: ganancia=payout/100, pérdida=-1.0
+            if self.venue == "BITGET":
+                # Para futuros: payout representa P&L en USDT
+                # Retorno = P&L / size (normalizado)
+                trade_return = result.payout / result.size if result.size > 0 else 0.0
+            else:
+                # IQ Option binario: WIN → +payout%, LOSS → -100%
+                if result.payout > 0:
+                    trade_return = result.payout / 100.0
+                else:
+                    trade_return = -1.0
+            self._returns_history.append(trade_return)
 
             # ── Active Position Management Delegation ─────────────────────
             if self._position_manager:
@@ -663,14 +694,16 @@ class NexusPipeline:
                 return SignalDirection.BUY
             elif signal_str == "SELL":
                 return SignalDirection.SELL
-            return SignalDirection.BUY  # fallback seguro para futuros
+            logger.warning(f"Señal desconocida '{signal_str}' para BITGET → fallback BUY")
+            return SignalDirection.BUY
         else:
             # IQ Option: binary direction
             if signal_str == "BUY":
                 return SignalDirection.CALL
             elif signal_str == "SELL":
                 return SignalDirection.PUT
-            return SignalDirection.CALL  # fallback seguro para binarios
+            logger.warning(f"Señal desconocida '{signal_str}' para IQ_OPTION → fallback CALL")
+            return SignalDirection.CALL
 
     # ══════════════════════════════════════════════════════════════════
     #  State Accessors
@@ -751,6 +784,30 @@ class NexusPipeline:
             "macro_regime": self.macro_agent.current_regime.value if self.macro_agent else "GREEN",
             "execution_engine": repr(self.execution_engine) if self.execution_engine else "N/A",
         }
+
+    async def _daily_reset_loop(self) -> None:
+        """Resetea contadores diarios cada 24 horas (alineado a UTC medianoche)."""
+        import math
+        from datetime import date, timedelta
+        while self._running:
+            now = datetime.now(timezone.utc)
+            # Próxima medianoche UTC
+            next_midnight = datetime.combine(
+                date.today() + timedelta(days=1),
+                datetime.min.time(),
+                tzinfo=timezone.utc,
+            )
+            seconds_until_midnight = (next_midnight - now).total_seconds()
+            await asyncio.sleep(seconds_until_midnight)
+            self.reset_daily_counters()
+            logger.info("📅 Daily counters reset at UTC midnight.")
+
+    async def _safe_get_balance(self) -> float:
+        """Balance con fallback seguro para guardianes de riesgo."""
+        try:
+            return await self.execution_engine.get_balance()
+        except Exception:
+            return 20.0
 
     # ══════════════════════════════════════════════════════════════════
     #  Shutdown
