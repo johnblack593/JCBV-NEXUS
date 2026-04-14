@@ -144,6 +144,14 @@ class AbstractExecutionEngine(ABC):
         ...
 
     @abstractmethod
+    async def get_best_available_asset(self, min_payout: int = 80) -> Optional[Dict[str, str]]:
+        """
+        Retorna el mejor activo disponible.
+        Ahora devuelve un dict con {"symbol": str, "market_type": str}
+        """
+        ...
+
+    @abstractmethod
     async def get_payout(self, asset: str) -> float:
         """
         Retorna el payout/spread actual del activo.

@@ -243,8 +243,9 @@ class NexusPipeline:
                     best_asset = await self.opportunity_agent.get_best_asset()
                     
                 if not best_asset and hasattr(self.execution_engine, "get_best_available_asset"):
-                    best_asset = await self.execution_engine.get_best_available_asset(min_payout)
-                    
+                    best_match = await self.execution_engine.get_best_available_asset(min_payout)
+                    if best_match:
+                        best_asset = best_match["symbol"]
                 if best_asset:
                     payout = await self.execution_engine.get_payout(best_asset)
                     regime = await self.get_macro_regime()

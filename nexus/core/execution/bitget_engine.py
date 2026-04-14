@@ -338,7 +338,7 @@ class BitgetExecutionEngine(AbstractExecutionEngine):
         """Returns effective payout % based on leverage."""
         return float(self._leverage * 100 * 0.998)
 
-    async def get_best_available_asset(self, min_payout: int = 80) -> Optional[str]:
+    async def get_best_available_asset(self, min_payout: int = 80) -> Optional[Dict[str, str]]:
         """
         For Bitget, returns the most liquid USDT-M perpetual by 24h volume.
         Fetches tickers and returns the symbol with highest quoteVolume
@@ -364,7 +364,10 @@ class BitgetExecutionEngine(AbstractExecutionEngine):
                         max_vol = vol
                         best_asset = symbol
                         
-            return best_asset
+            if best_asset:
+                market_type = "futures" if best_asset in getattr(self._exchange_futures, "markets", {}) else "spot"
+                return {"symbol": best_asset, "market_type": market_type}
+            return None
         except Exception as exc:
             logger.error(f"Bitget get_best_available_asset failed: {exc}")
             return None

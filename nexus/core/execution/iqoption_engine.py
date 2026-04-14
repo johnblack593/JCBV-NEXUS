@@ -163,8 +163,12 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
         except Exception:
             return 0.0
 
-    async def get_best_available_asset(self, min_payout: int = 80) -> Optional[str]:
-        """Itera todos los activos, filtra los suspendidos y devuelve el de mejor payout."""
+    async def get_best_available_asset(self, min_payout: int = 80) -> Optional[Dict[str, str]]:
+        """
+        Retorna el activo turbo/binary abierto que cumpla el min_payout con la
+        mayor liquidez simulada (IQOption internamente no da volumen, pero
+        filtramos por mejor payout primariamente).
+        """
         if not await self.connect():
             return None
 
@@ -191,7 +195,8 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
 
             if best_asset:
                 logger.info(f"🔎 Scanner: Mejor activo detectado -> {best_asset} ({best_payout:.1f}%)")
-            return best_asset
+                return {"symbol": best_asset, "market_type": "binary"}
+            return None
 
         except Exception as exc:
             logger.error(f"Error escaneando mejores activos: {exc}")
