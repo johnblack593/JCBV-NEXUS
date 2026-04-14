@@ -73,6 +73,15 @@ _IQ_OPTION_CONFIG = {
     "cooldown_between_trades_s": 300,  # 5 min entre trades
 }
 
+# Bitget: Dollar-risk sizing, futures mode
+_BITGET_CONFIG = {
+    "signal_mode": "futures",
+    "max_daily_trades": 10,
+    "min_confidence": 0.60,
+    "min_payout": 0,                # Futures: no payout concept
+    "cooldown_between_trades_s": 300,
+}
+
 
 class NexusPipeline:
     """
@@ -105,6 +114,12 @@ class NexusPipeline:
         
         self.venue = self._venue_override or os.getenv("EXECUTION_VENUE", "IQ_OPTION").upper()
         self.dry_run_mode = os.getenv("DRY_RUN", "False").lower() in ("true", "1", "yes")
+
+        # ── Venue-specific config ─────────────────────────────────
+        if self.venue == "BITGET":
+            self._config = dict(_BITGET_CONFIG)
+        else:
+            self._config = dict(_IQ_OPTION_CONFIG)
 
         # ── Strategy Factory (reads ACTIVE_STRATEGY env) ─────────
         active_strategy_key = (self._strategy_override or os.getenv("ACTIVE_STRATEGY", "BINARY_ML")).upper()
@@ -200,6 +215,8 @@ class NexusPipeline:
             
             if self.venue == "BITGET":
                 self._position_manager = PositionManager(self.execution_engine)
+                synced = await self._position_manager.sync_open_positions()
+                logger.info(f"🔄 PositionManager: {synced} open position(s) synced from exchange.")
         else:
             logger.warning("⚠️ Execution engine no conectado. Pipeline en modo dry-run.")
 
@@ -470,7 +487,7 @@ class NexusPipeline:
                 self._returns_history.append(result.payout / 100.0)
 
             # ── Active Position Management Delegation ─────────────────────
-            if self._position_manager and result.status == ExecutionStatus.FILLED:
+            if self._position_manager:
                 pos = OpenPosition(
                     asset=asset,
                     direction="buy" if direction in (SignalDirection.BUY, SignalDirection.CALL) else "sell",
@@ -555,28 +572,77 @@ class NexusPipeline:
 
     async def _calculate_size(self, confidence: float, df: Any) -> float:
         """
-        Progressive flat sizing for IQ Option.
+        Position sizing for NEXUS.
 
-        $1 until balance >= $50, then $2 until $200, then $5.
-        Capped at max_size from config.
+        IQ Option: flat progressive sizing ($1/$2/$5 by balance tier).
+        Bitget:    dollar-risk sizing — balance * risk_pct / price * leverage.
+                   Returns contract size in base asset units (e.g., BTC).
+                   Capped by BITGET_MAX_SIZE_USDT to prevent overleveraging.
         """
         try:
             balance = await self.execution_engine.get_balance()
         except Exception:
             balance = 20.0
 
-        base = self._config.get("base_size", 1.0)
-        max_size = self._config.get("max_size", 50.0)
-
-        # Progressive sizing: $1 until $50, then $2 until $200, etc.
-        if balance >= 200:
-            size = min(5.0, max_size)
-        elif balance >= 50:
-            size = min(2.0, max_size)
+        if self.venue == "BITGET":
+            return await self._calculate_bitget_size(balance, df)
         else:
-            size = base
+            return self._calculate_iq_size(balance)
 
-        return size
+    def _calculate_iq_size(self, balance: float) -> float:
+        """Flat progressive sizing for IQ Option binary trades."""
+        base     = self._config.get("base_size", 1.0)
+        max_size = self._config.get("max_size", 50.0)
+        if balance >= 200:
+            return min(5.0, max_size)
+        elif balance >= 50:
+            return min(2.0, max_size)
+        return base
+
+    async def _calculate_bitget_size(
+        self, balance: float, df: Any
+    ) -> float:
+        """
+        Dollar-risk sizing for Bitget futures.
+
+        Returns contract size in base asset units.
+        The PositionManager will use this as original_size.
+
+        Formula:
+          dollars_at_risk = balance * BITGET_RISK_PCT_PER_TRADE
+          contract_size   = (dollars_at_risk * leverage) / current_price
+
+        Caps:
+          - Minimum notional: BITGET_MIN_ORDER_USDT (default $5)
+          - Maximum notional: BITGET_MAX_SIZE_USDT  (default $50)
+          - Minimum contracts: enforced by Stream F guard
+        """
+        risk_pct   = float(os.getenv("BITGET_RISK_PCT_PER_TRADE", "0.01"))
+        leverage   = float(os.getenv("BITGET_LEVERAGE",           "5"))
+        min_usdt   = float(os.getenv("BITGET_MIN_ORDER_USDT",     "5.0"))
+        max_usdt   = float(os.getenv("BITGET_MAX_SIZE_USDT",      "50.0"))
+
+        try:
+            current_price = float(df["close"].iloc[-1])
+        except Exception:
+            logger.warning("Bitget sizing: could not read current price. Skipping.")
+            return 0.0
+
+        if current_price <= 0:
+            return 0.0
+
+        dollars_at_risk = balance * risk_pct
+        # Clamp notional between min and max
+        dollars_at_risk = max(min_usdt, min(dollars_at_risk * leverage, max_usdt))
+        contract_size   = dollars_at_risk / current_price
+
+        logger.debug(
+            f"Bitget sizing | balance=${balance:.2f} | "
+            f"risk={risk_pct*100:.1f}% | leverage={leverage}x | "
+            f"price={current_price:.4f} | notional=${dollars_at_risk:.2f} | "
+            f"contracts={contract_size:.6f}"
+        )
+        return contract_size
 
     # ══════════════════════════════════════════════════════════════════
     #  Signal Direction Mapping
