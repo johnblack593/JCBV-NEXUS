@@ -42,7 +42,7 @@ class GeminiClient:
 
     async def _ensure_session(self) -> RetryClient:
         """Lazily initializes the aiohttp RetryClient on first call."""
-        if self._session is None or self._session.closed:
+        if self._session is None or self._session._client_session.closed:
             retry_opts = ExponentialRetry(
                 attempts=3,
                 start_timeout=1.0,
@@ -102,6 +102,6 @@ class GeminiClient:
 
     async def close(self) -> None:
         """Releases the aiohttp ClientSession."""
-        if self._session and not self._session.closed:
+        if self._session:
             await self._session.close()
             self._session = None

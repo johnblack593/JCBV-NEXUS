@@ -146,6 +146,7 @@ class MacroAgent:
         self._gemini_keys: List[str] = []
         self._groq_idx = 0
         self._gemini_idx = 0
+        self._llm_provider = "UNKNOWN"
         self._load_api_keys()
 
     def _load_api_keys(self) -> None:
@@ -352,6 +353,7 @@ class MacroAgent:
                     timeout=15.0,
                 )
                 if result:
+                    self._llm_provider = provider_name
                     return result
             except asyncio.TimeoutError:
                 logger.warning(f"MacroAgent LLM timeout ({provider_name}, 15s)")

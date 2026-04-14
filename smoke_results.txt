@@ -1,0 +1,8 @@
+initialize: OK
+balance: OK ()
+macro_regime: OK (GREEN)
+circuit_breaker: OK (active=True)
+tick_dry_run: OK
+session_stats: OK
+shutdown: OK
+RESULT: PASSED

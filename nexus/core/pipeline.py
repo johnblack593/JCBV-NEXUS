@@ -145,6 +145,7 @@ class NexusPipeline:
         self.execution_engine: Optional[AbstractExecutionEngine] = None
         self._position_manager: Optional[PositionManager] = None
         self.metrics: Optional[NexusMetrics] = None
+        self.telegram: Optional[TelegramReporter] = None
 
         # Session tracking
         self._running = False
@@ -819,9 +820,10 @@ class NexusPipeline:
         logger.info("🛑 NEXUS Pipeline — Shutting down...")
 
         # Telegram: Shutdown broadcast (before disconnecting services)
-        stats = self.get_session_stats()
-        self.telegram.fire_shutdown(stats)
-        await asyncio.sleep(1)  # Grace period for Telegram dispatch
+        if self.telegram:
+            stats = self.get_session_stats()
+            self.telegram.fire_shutdown(stats)
+            await asyncio.sleep(1)  # Grace period for Telegram dispatch
 
         if self.macro_agent:
             await self.macro_agent.stop()
@@ -830,9 +832,7 @@ class NexusPipeline:
             await self.opportunity_agent.stop()
         if self.execution_engine:
             await self.execution_engine.disconnect()
-        if self.risk_manager:
-            self.risk_manager.close()
-            
+        
         if self._position_manager:
             await self._position_manager.stop()
 
