@@ -1,35 +1,60 @@
-# ── Exchange & Networking ────────────────────────────────────────────
-ccxt>=4.3.0
-aiohttp>=3.9.0
-aiohttp-retry>=2.8.3
+# ═══════════════════════════════════════════════════════════════════
+# NEXUS v5.0 (beta) — Dependencias de Producción Unificadas
+# Python 3.11+ requerido
+# ═══════════════════════════════════════════════════════════════════
+# Instalación:
+#   pip install -r requirements.txt
+#
+# Este archivo es la fuente única de verdad para dependencias.
+# nexus/requirements.txt es un alias — apunta a este.
+#
+# Venues: IQ Option (primario) + Bitget/Binance (ccxt)
+# LLM: Groq + Gemini via aiohttp REST directo (sin SDK wrappers)
+# ML: scikit-learn ensemble CPU-only (TensorFlow eliminado en v5.0)
+# ═══════════════════════════════════════════════════════════════════
 
-# ── Data & Signals ───────────────────────────────────────────────────
-pandas>=2.1.0
-numpy>=1.26.0
+# ── IQ Option API (fork JCBV modernizado) ────────────────────────
+git+https://github.com/johnblack593/IQOP-API-JOHNBARZOLA.git@main
+
+# ── Exchange & Networking ─────────────────────────────────────────
+ccxt>=4.4.56
+aiohttp>=3.9.5
+aiohttp-retry>=2.8.3
+websockets>=14.1
+
+# ── Dashboard ─────────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn>=0.30.0
+
+# ── Data & Análisis Cuantitativo ──────────────────────────────────
+pandas>=2.2.3
+numpy>=2.2.1
+scipy>=1.15.1
 ta>=0.11.0
 
-# ── Machine Learning (opcional — fallback si no está disponible) ─────
-# Si no vas a usar ML, puedes comentar estas líneas.
-# El sistema tiene fallback automático si no están instaladas.
-scikit-learn>=1.4.0
+# ── Machine Learning (ensemble CPU-only) ─────────────────────────
+scikit-learn>=1.8.0
 
-# ── LLM Providers ────────────────────────────────────────────────────
+# ── LLM Providers ────────────────────────────────────────────────
 groq>=0.9.0
 google-generativeai>=0.7.0
 
-# ── Infrastructure ───────────────────────────────────────────────────
-redis>=5.0.0
-python-dotenv>=1.0.0
-prometheus-client>=0.20.0
-
-# ── Telegram Alerts ─────────────────────────────────────────────────
-python-telegram-bot>=21.0.0
-
-# ── Visualization (reporte semanal con chart de equity) ──────────────
-# Solo necesario si quieres el chart PNG en el reporte de Telegram.
-# El sistema funciona sin esto — solo omite el gráfico.
-matplotlib>=3.8.0
-
-# ── QuestDB (Data Lake) ──────────────────────────────────────────────
-# Cliente ILP para escritura rápida de series de tiempo.
+# ── Persistencia & Estado ─────────────────────────────────────────
+redis>=5.2.0
 questdb>=1.1.0
+sqlalchemy>=2.0.0
+
+# ── Observabilidad ────────────────────────────────────────────────
+prometheus-client>=0.21.0
+
+# ── Notificaciones ────────────────────────────────────────────────
+python-telegram-bot>=21.0
+
+# ── Configuración ─────────────────────────────────────────────────
+python-dotenv>=1.0.0
+pydantic>=2.7.0
+python-dateutil>=2.9.0
+
+# ── Visualización (reporte equity en Telegram) ────────────────────
+# Opcional — el sistema funciona sin esto, solo omite el gráfico PNG.
+matplotlib>=3.8.0
