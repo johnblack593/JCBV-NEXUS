@@ -86,6 +86,7 @@ class QuantRiskManager:
 
     # Constantes
     KELLY_MAX_FRACTION = 0.25           # Cap del Kelly fraccionado
+    KELLY_MIN_FLOOR = 0.01   # Si f* < 1%, no vale la pena operar
     Z_SCORES = {0.95: 1.645, 0.99: 2.326}
     CIRCUIT_BREAKER_COOLDOWN = 86_400   # 24 horas en segundos
     CB_STATE_FILE = "cb_state.json"     # Persistencia del circuit breaker
@@ -157,6 +158,11 @@ class QuantRiskManager:
             return 0.0
 
         # Regla: cap a 0.25 (Kelly fraccionado)
+        # Piso mínimo operacional: Kelly < 1% no justifica abrir posición
+        if f_star < self.KELLY_MIN_FLOOR:
+            logger.info("Kelly f*=%.4f < MIN_FLOOR %.2f → no operar", f_star, self.KELLY_MIN_FLOOR)
+            return 0.0
+
         result = min(f_star, self.KELLY_MAX_FRACTION)
 
         logger.info(
@@ -267,6 +273,18 @@ class QuantRiskManager:
             logger.warning("VaR histórico: solo %d muestras (mínimo recomendado: 30)", len(returns_list))
 
         returns_arr = np.array(returns_list, dtype=np.float64)
+
+        # Detectar retornos en formato incorrecto (>10 = probablemente porcentaje entero)
+        max_abs = float(np.max(np.abs(returns_arr)))
+        if max_abs > 10.0:
+            logger.warning(
+                "VaR: retornos parecen estar en formato porcentual entero "
+                "(max_abs=%.2f). Se esperan valores como 0.01 para 1%%. "
+                "Normalizar dividiendo por 100.",
+                max_abs
+            )
+            returns_arr = returns_arr / 100.0
+
         alpha = (1.0 - confidence) * 100  # e.g. 5.0 para 95%
 
         # Percentil real de la cola izquierda
@@ -630,8 +648,12 @@ class QuantRiskManager:
             Tamaño de posición como porcentaje del capital (0.0 – 15.0)
         """
         if atr <= 0 or current_price <= 0 or capital <= 0:
-            logger.warning("ATR sizing: parámetros inválidos (atr=%.4f, price=%.2f, capital=%.2f)", atr, current_price, capital)
-            return 5.0  # Fallback conservador
+            logger.error(
+                "ATR sizing: parámetros inválidos (atr=%.4f, price=%.2f, capital=%.2f) "
+                "→ retornando 0.0 (fail-safe). Verificar data handler.",
+                atr, current_price, capital
+            )
+            return 0.0  # Fail-safe: datos inválidos = no abrir posición
 
         risk_amount = capital * risk_per_trade
         dollar_risk_per_unit = atr * atr_multiplier
@@ -646,6 +668,46 @@ class QuantRiskManager:
             atr, risk_amount, units, position_pct,
         )
         return round(position_pct, 2)  # type: ignore
+
+    def max_exposure_check(
+        self,
+        proposed_size_pct: float,
+        current_exposure_pct: float,
+        max_portfolio_exposure: float = 0.80,
+    ) -> float:
+        """
+        Verifica que la exposición total del portafolio no exceda el límite.
+
+        Limita el tamaño propuesto si sumarlo a la exposición actual
+        superaría max_portfolio_exposure (default: 80% del portafolio).
+
+        Args:
+            proposed_size_pct:      Tamaño propuesto como % del capital (0-100)
+            current_exposure_pct:   Exposición actual total como % del capital (0-100)
+            max_portfolio_exposure: Límite máximo de exposición total (0.0-1.0)
+
+        Returns:
+            Tamaño ajustado como % del capital (puede ser 0.0 si no hay espacio)
+        """
+        max_pct = max_portfolio_exposure * 100.0
+        available_pct = max(0.0, max_pct - current_exposure_pct)
+
+        if available_pct <= 0:
+            logger.warning(
+                "max_exposure_check: exposición actual %.1f%% >= límite %.1f%% → bloqueando",
+                current_exposure_pct, max_pct
+            )
+            return 0.0
+
+        adjusted = min(proposed_size_pct, available_pct)
+
+        if adjusted < proposed_size_pct:
+            logger.info(
+                "max_exposure_check: tamaño reducido %.1f%% → %.1f%% (límite de exposición)",
+                proposed_size_pct, adjusted
+            )
+
+        return round(adjusted, 2)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -848,6 +910,12 @@ def _run_validation() -> bool:
     )
 
     # Test 2: Altísima volatilidad → se recorta por min/max cap (ej min 1.0%)
+    atr_invalid = rm.atr_position_size(0.0, 2000.0, 10000.0, 0.01, 2.0)
+    check(
+        "ATR parámetros inválidos (atr=0) → 0.0 (fail-safe)",
+        atr_invalid == 0.0,
+        f"Esperado 0.0, obtenido {atr_invalid}",
+    )
     atr_pct2 = rm.atr_position_size(10000.0, 10000.0, 2000.0, 0.01, 2.0)
     check(
         "ATR Volatilidad extrema → clamp a 1.0%",
@@ -897,6 +965,42 @@ def _run_validation() -> bool:
         print("  [SKIP] scipy no instalado — correlation checks omitidos")
 
     # ── RESULTADO FINAL ───────────────────────────────────────────
+
+    print("\n--- Max Exposure Check ---")
+
+    rm_exp = QuantRiskManager(log_dir="logs")
+
+    # Test 1: sin espacio → retorna 0.0
+    exp1 = rm_exp.max_exposure_check(10.0, 82.0, 0.80)
+    check(
+        "max_exposure: exposición 82% >= 80% → retorna 0.0",
+        exp1 == 0.0,
+        f"Obtenido {exp1}",
+    )
+
+    # Test 2: espacio parcial → tamaño reducido
+    exp2 = rm_exp.max_exposure_check(15.0, 70.0, 0.80)
+    check(
+        "max_exposure: propuesto 15%, disponible 10% → retorna 10.0",
+        exp2 == 10.0,
+        f"Obtenido {exp2}",
+    )
+
+    # Test 3: hay espacio suficiente → tamaño sin cambios
+    exp3 = rm_exp.max_exposure_check(5.0, 30.0, 0.80)
+    check(
+        "max_exposure: propuesto 5%, disponible 50% → retorna 5.0",
+        exp3 == 5.0,
+        f"Obtenido {exp3}",
+    )
+
+    # Test 4: kelly floor activo
+    k_floor = rm_exp.kelly_criterion(0.501, 1.0, 1.0)
+    check(
+        "Kelly f* < MIN_FLOOR → retorna 0.0",
+        k_floor == 0.0,
+        f"Obtenido {k_floor}",
+    )
 
     print("\n" + "=" * 60)
     if failed == 0:
