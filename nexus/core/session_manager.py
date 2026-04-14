@@ -42,6 +42,20 @@ class NexusSessionManager:
         self._pipelines: Dict[str, NexusPipeline] = {}
         self._tasks: Dict[str, asyncio.Task] = {}
 
+    _SESSION_CONFIGS = {
+        "IQ_OPTION": {
+            "venue":    "IQ_OPTION",
+            "strategy": "BINARY_ML",
+        },
+        "BITGET": {
+            "venue":    "BITGET",
+            "strategy": "BITGET_TREND_SCALPER",
+        },
+    }
+
+    def _get_session_config(self, name: str) -> dict | None:
+        return self._SESSION_CONFIGS.get(name)
+
     async def run(self) -> None:
         """
         Initializes and launches all active sessions.
@@ -54,23 +68,17 @@ class NexusSessionManager:
     async def _initialize_sessions(self) -> None:
         """Creates and initializes NexusPipeline for each active session."""
         for name in self._active_sessions:
-            if name == "IQ_OPTION":
-                os.environ["EXECUTION_VENUE"] = "IQ_OPTION"
-                os.environ["ACTIVE_STRATEGY"] = "BINARY_ML"
-                pipeline = NexusPipeline()
-                await pipeline.initialize()
-                self._pipelines["IQ_OPTION"] = pipeline
-                
-            elif name == "BITGET":
-                os.environ["EXECUTION_VENUE"] = "BITGET"
-                os.environ["ACTIVE_STRATEGY"] = "BITGET_TREND_SCALPER"
-                pipeline = NexusPipeline()
-                await pipeline.initialize()
-                self._pipelines["BITGET"] = pipeline
-                
-            else:
-                logger.error(f"Unknown session: {name}. Valid: IQ_OPTION, BITGET")
+            config = self._get_session_config(name)
+            if config is None:
+                logger.error(f"Unknown session: {name}. Valid: {list(self._SESSION_CONFIGS)}")
                 continue
+            
+            pipeline = NexusPipeline(
+                venue=config["venue"],
+                strategy=config["strategy"]
+            )
+            await pipeline.initialize()
+            self._pipelines[name] = pipeline
 
     async def _run_session(self, name: str, pipeline: NexusPipeline) -> None:
         """

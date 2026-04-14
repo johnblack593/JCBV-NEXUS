@@ -92,17 +92,21 @@ class NexusPipeline:
         "BITGET_TREND_SCALPER": BitgetTrendScalperStrategy,
     }
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        venue: str | None = None,
+        strategy: str | None = None,
+    ) -> None:
+        self._venue_override = venue
+        self._strategy_override = strategy
+        
         load_dotenv()
-        self.venue = os.getenv("EXECUTION_VENUE", "IQ_OPTION").upper()
+        
+        self.venue = self._venue_override or os.getenv("EXECUTION_VENUE", "IQ_OPTION").upper()
         self.dry_run_mode = os.getenv("DRY_RUN", "False").lower() in ("true", "1", "yes")
 
-        # IQ Option is the only active venue in v5.0.
-        # Bitget config will be introduced in Phase 3 via the engine adapter.
-        self._config = dict(_IQ_OPTION_CONFIG)
-
         # ── Strategy Factory (reads ACTIVE_STRATEGY env) ─────────
-        active_strategy_key = os.getenv("ACTIVE_STRATEGY", "BINARY_ML").upper()
+        active_strategy_key = (self._strategy_override or os.getenv("ACTIVE_STRATEGY", "BINARY_ML")).upper()
 
         strategy_cls = self._STRATEGY_REGISTRY.get(active_strategy_key)
         if strategy_cls is None:
@@ -176,7 +180,7 @@ class NexusPipeline:
         logger.info("🛡️ QuantRiskManager inicializado")
 
         # ── Layer 5: Execution Engine (Factory) ───────────────────────
-        self.execution_engine = get_execution_engine()
+        self.execution_engine = get_execution_engine(force_venue=self.venue)
         connected = await self.execution_engine.connect()
         if connected:
             balance = await self.execution_engine.get_balance()
