@@ -115,7 +115,7 @@ class BitgetExecutionEngine(AbstractExecutionEngine):
                         
                         self._exchange_futures = ccxt_async.bitget(cfg)
                         self._exchange_futures.set_sandbox_mode(self._sandbox)
-                        await asyncio.to_thread(self._exchange_futures.load_markets)
+                        await self._exchange_futures.load_markets()
 
                     if self._mode in ("spot", "both"):
                         cfg = config_base.copy()
@@ -123,7 +123,7 @@ class BitgetExecutionEngine(AbstractExecutionEngine):
                         
                         self._exchange_spot = ccxt_async.bitget(cfg)
                         self._exchange_spot.set_sandbox_mode(self._sandbox)
-                        await asyncio.to_thread(self._exchange_spot.load_markets)
+                        await self._exchange_spot.load_markets()
 
                     self._connected = True
                     logger.info(f"✅ Bitget connected [mode={self._mode}, leverage={self._leverage}x, sandbox={self._sandbox}]")
