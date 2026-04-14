@@ -144,19 +144,19 @@ class TelegramReporter:
     ) -> None:
         regime_emoji = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴"}.get(new_regime, "⚪")
         action = {
-            "GREEN": "HFT Engine ACTIVE. Full trading enabled.",
-            "YELLOW": "Caution mode. Confidence reduced 20%.",
-            "RED": "HFT Engine PAUSED. No new trades.",
-        }.get(new_regime, "Unknown regime.")
+            "GREEN": "Motor HFT ACTIVO. Trading habilitado.",
+            "YELLOW": "Modo precaución. Confianza reducida 20%.",
+            "RED": "Motor HFT PAUSADO. Sin nuevas operaciones.",
+        }.get(new_regime, "Régimen desconocido.")
 
         msg = (
-            f"🚨 *MACRO SHIFT*\n"
+            f"🚨 *CAMBIO DE RÉGIMEN*\n"
             f"─────────────────\n"
-            f"📊 *Regime Change:* `{old_regime}` → {regime_emoji} `{new_regime}`\n"
-            f"⚡ *Action:* {action}\n"
+            f"📊 *Cambio de Régimen:* `{old_regime}` → {regime_emoji} `{new_regime}`\n"
+            f"⚡ *Acción:* {action}\n"
         )
         if reason:
-            msg += f"📋 *Reason:* {reason}\n"
+            msg += f"📋 *Motivo:* {reason}\n"
         msg += f"─────────────────\n⏱ {self._timestamp()}"
 
         await self._send(msg)
@@ -172,10 +172,10 @@ class TelegramReporter:
     async def _send_market_briefing(self, macro_regime: str, best_asset: str, payout: float) -> None:
         regime_emoji = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴"}.get(macro_regime, "⚪")
         msg = (
-            f"📰 *NEXUS Morning Briefing*\n"
+            f"📰 *NEXUS Briefing Matutino*\n"
             f"─────────────────\n"
             f"📊 *Macro:* {regime_emoji} `{macro_regime}`\n"
-            f"🏆 *Top Asset:* `{best_asset}`\n"
+            f"🏆 *Mejor Activo:* `{best_asset}`\n"
             f"💰 *Payout:* `{payout:.1f}%`\n"
             f"─────────────────\n"
             f"⏱ {self._timestamp()}"
@@ -196,13 +196,13 @@ class TelegramReporter:
         self, drawdown: float, cooldown_hours: int
     ) -> None:
         msg = (
-            f"⚠️ *CIRCUIT BREAKER ENGAGED*\n"
+            f"⚠️ *CIRCUIT BREAKER ACTIVADO*\n"
             f"─────────────────\n"
-            f"⛔ All positions *CLOSED* (emergency)\n"
-            f"🔒 Trading *HALTED* for `{cooldown_hours}h`\n"
-            f"📉 *Max Drawdown:* `{drawdown:.1%}`\n"
+            f"⛔ Todas las posiciones *CERRADAS* (emergencia)\n"
+            f"🔒 Trading *DETENIDO* por `{cooldown_hours}h`\n"
+            f"📉 *Drawdown Máximo:* `{drawdown:.1%}`\n"
             f"─────────────────\n"
-            f"🛡️ NEXUS Risk Management\n"
+            f"🛡️ Gestión de Riesgo NEXUS\n"
             f"⏱ {self._timestamp()}"
         )
         await self._send(msg)
@@ -241,24 +241,24 @@ class TelegramReporter:
             "BUY": "🟢 LONG", "SELL": "🔴 SHORT",
         }.get(direction, direction)
 
-        mode = "SNIPER" if venue == "IQ_OPTION" else "INSTITUTIONAL"
+        mode = "[ENTRADA SNIPER]" if venue == "IQ_OPTION" else "[ENTRADA INSTITUCIONAL]"
 
         msg = (
-            f"🎯 *[{mode} ENTRY]*\n"
+            f"🎯 *{mode}*\n"
             f"─────────────────\n"
-            f"🪙 *Asset:* `{asset}`\n"
-            f"🎯 *Direction:* {dir_emoji}\n"
-            f"💵 *Size:* `${size:.2f}`\n"
-            f"🤖 *Confidence:* `{confidence:.0%}`\n"
-            f"🌐 *Venue:* `{venue}`\n"
-            f"📊 *Regime:* `{regime}`\n"
+            f"🪙 *Activo:* `{asset}`\n"
+            f"🎯 *Dirección:* {dir_emoji}\n"
+            f"💵 *Monto:* `${size:.2f}`\n"
+            f"🤖 *Confianza:* `{confidence:.0%}`\n"
+            f"🌐 *Exchange:* `{venue}`\n"
+            f"📊 *Régimen:* `{regime}`\n"
         )
         if reason:
             # Reemplazamos delimitadores comunes por saltos de línea para mostrar el breakdown en estilo lista
             formatted_reason = reason.replace(' |', '\n  ▫️').replace(', ', '\n  ▫️')
             if not formatted_reason.startswith('  ▫️'):
                 formatted_reason = f"  ▫️ {formatted_reason}"
-            msg += f"📋 *Breakdown:*\n{formatted_reason}\n"
+            msg += f"📋 *Detalle:*\n{formatted_reason}\n"
         msg += f"─────────────────\n⏱ {self._timestamp()}"
 
         await self._send(msg)
@@ -312,13 +312,13 @@ class TelegramReporter:
         self._weekly_equity.append(new_balance)
 
         msg = (
-            f"{emoji} *TRADE RESULT*\n"
+            f"{emoji} *RESULTADO*\n"
             f"─────────────────\n"
-            f"🪙 *Asset:* `{asset}` | {direction}\n"
-            f"💰 *P&L:* `{pnl_str}`\n"
+            f"🪙 *Activo:* `{asset}` | {direction}\n"
+            f"💰 *G/P:* `{pnl_str}`\n"
             f"📊 *Payout:* `{payout_pct:.0f}%`\n"
             f"💼 *Balance:* `${new_balance:.2f}`\n"
-            f"📈 *Session P&L:* `{'+'if self._session_pnl>=0 else ''}${self._session_pnl:.2f}`\n"
+            f"📈 *G/P de sesión:* `{'+'if self._session_pnl>=0 else ''}${self._session_pnl:.2f}`\n"
             f"─────────────────\n"
             f"⏱ {self._timestamp()}"
         )
@@ -334,14 +334,14 @@ class TelegramReporter:
 
     async def _send_system_error(self, error_msg: str, module: str) -> None:
         msg = (
-            f"🚨 *SYSTEM ERROR*\n"
+            f"🚨 *ERROR DEL SISTEMA*\n"
             f"─────────────────\n"
-            f"📦 *Module:* `{module}`\n"
+            f"📦 *Módulo:* `{module}`\n"
             f"⚠️ *Error:* `{error_msg[:400]}`\n"
             f"─────────────────\n"
             f"⏱ {self._timestamp()}"
         )
-        await self._send(msg)
+        await self._send_dev(msg)
 
     # ══════════════════════════════════════════════════════════════════
     #  EVENT 6: WEEKLY REPORT
@@ -356,10 +356,10 @@ class TelegramReporter:
 
         if not trades:
             msg = (
-                f"📊 *NEXUS | WEEKLY REPORT*\n"
+                f"📊 *NEXUS | REPORTE SEMANAL*\n"
                 f"🗓️ {start.strftime('%d/%m/%Y')} → {now.strftime('%d/%m/%Y')}\n"
                 f"─────────────────\n"
-                f"No trades executed this week.\n"
+                f"Sin operaciones esta semana.\n"
                 f"💼 *Balance:* `${capital_actual:.2f}`\n"
             )
             await self._send(msg)
@@ -384,14 +384,14 @@ class TelegramReporter:
         pnl_emoji = "📈" if total_pnl >= 0 else "📉"
 
         msg = (
-            f"📊 *NEXUS | WEEKLY REPORT*\n"
+            f"📊 *NEXUS | REPORTE SEMANAL*\n"
             f"🗓️ {start.strftime('%d/%m/%Y')} → {now.strftime('%d/%m/%Y')}\n"
             f"─────────────────────────\n"
-            f"{pnl_emoji} *P&L:* `{'+'if total_pnl>=0 else ''}${total_pnl:.2f}`\n"
-            f"💼 *Trades:* `{len(trades)}` (W:`{len(wins)}` | L:`{len(losses)}`)\n"
-            f"🎯 *Win Rate:* `{win_rate:.1f}%`\n"
-            f"⚖️ *Profit Factor:* `{pf:.2f}`\n"
-            f"📉 *Max Drawdown:* `{max_dd:.2f}%`\n"
+            f"{pnl_emoji} *G/P:* `{'+'if total_pnl>=0 else ''}${total_pnl:.2f}`\n"
+            f"💼 *Operaciones:* `{len(trades)}` (W:`{len(wins)}` | L:`{len(losses)}`)\n"
+            f"🎯 *Tasa de Éxito:* `{win_rate:.1f}%`\n"
+            f"⚖️ *Factor de Beneficio:* `{pf:.2f}`\n"
+            f"📉 *Drawdown Máximo:* `{max_dd:.2f}%`\n"
             f"─────────────────────────\n"
             f"💰 *Balance:* `${capital_actual:.2f}`\n"
             f"⚡ NEXUS Analytics\n"
@@ -425,12 +425,12 @@ class TelegramReporter:
 
     async def _send_startup(self, venue: str, balance: float) -> None:
         msg = (
-            f"🚀 *NEXUS v4.0 ONLINE*\n"
+            f"🚀 *NEXUS v5.0 EN LÍNEA*\n"
             f"─────────────────\n"
-            f"🌐 *Venue:* `{venue}`\n"
+            f"🌐 *Exchange:* `{venue}`\n"
             f"💰 *Balance:* `${balance:.2f}`\n"
-            f"📊 *Mode:* `{'Sniper (1-3/day)' if venue == 'IQ_OPTION' else 'Institutional'}`\n"
-            f"🛡️ *Risk:* Circuit Breaker + Redis CB\n"
+            f"📊 *Modo:* `{'Sniper (1-3/día)' if venue == 'IQ_OPTION' else 'Institutional'}`\n"
+            f"🛡️ *Riesgo:* Circuit Breaker + Redis CB\n"
             f"─────────────────\n"
             f"⏱ {self._timestamp()}"
         )
@@ -442,11 +442,11 @@ class TelegramReporter:
 
     async def _send_shutdown(self, stats: Dict[str, Any]) -> None:
         msg = (
-            f"🛑 *NEXUS v4.0 OFFLINE*\n"
+            f"🛑 *NEXUS v5.0 FUERA DE LÍNEA*\n"
             f"─────────────────\n"
-            f"💼 *Trades today:* `{stats.get('daily_trades', 0)}`\n"
-            f"📈 *Session P&L:* `{'+'if self._session_pnl>=0 else ''}${self._session_pnl:.2f}`\n"
-            f"🌐 *Venue:* `{stats.get('venue', 'UNKNOWN')}`\n"
+            f"💼 *Operaciones hoy:* `{stats.get('daily_trades', 0)}`\n"
+            f"📈 *G/P de sesión:* `{'+'if self._session_pnl>=0 else ''}${self._session_pnl:.2f}`\n"
+            f"🌐 *Exchange:* `{stats.get('venue', 'UNKNOWN')}`\n"
             f"─────────────────\n"
             f"⏱ {self._timestamp()}"
         )
@@ -501,6 +501,65 @@ class TelegramReporter:
             except Exception as exc:
                 logger.warning(f"Telegram send failed: {exc}")
 
+    async def _send_dev(self, text: str) -> None:
+        """Envía un mensaje técnico al canal de desarrollo."""
+        if not self._connected or not self._bot:
+            logger.debug("Telegram dev no conectado. Msg: %s", text[:80])
+            return
+        # Si no hay dev_chat_id configurado, cae al canal principal
+        target = self._dev_chat_id if self._dev_chat_id else self._chat_id
+        if not target:
+            return
+        try:
+            await self._bot.send_message(
+                chat_id=target,
+                text=text,
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        except Exception:
+            try:
+                clean = text.replace("*", "").replace("`", "")
+                await self._bot.send_message(chat_id=target, text=clean)
+            except Exception as exc:
+                logger.warning(f"Telegram dev send failed: {exc}")
+
+    def fire_llm_fallback(self, provider: str, reason: str) -> None:
+        """Fire-and-forget DEV: todos los LLM fallaron, sin análisis."""
+        self._fire(self._send_dev_llm_fallback(provider, reason))
+
+    async def _send_dev_llm_fallback(self, provider: str, reason: str) -> None:
+        msg = (
+            f"🤖 *LLM SIN RESPUESTA*\n"
+            f"─────────────────\n"
+            f"📦 *Proveedor:* `{provider}`\n"
+            f"⚠️ *Motivo:* `{reason[:200]}`\n"
+            f"🔄 *Acción:* Análisis macro en modo heurístico.\n"
+            f"─────────────────\n"
+            f"⏱ {self._timestamp()}"
+        )
+        await self._send_dev(msg)
+
+    def fire_key_cooldown(self, provider: str, key_hint: str,
+                          cooldown_minutes: int) -> None:
+        """Fire-and-forget DEV: clave LLM entró en cooldown por límite."""
+        self._fire(self._send_dev_key_cooldown(provider, key_hint,
+                                               cooldown_minutes))
+
+    async def _send_dev_key_cooldown(self, provider: str, key_hint: str,
+                                     cooldown_minutes: int) -> None:
+        msg = (
+            f"🔑 *CLAVE LLM EN COOLDOWN*\n"
+            f"─────────────────\n"
+            f"📦 *Proveedor:* `{provider}`\n"
+            f"🔑 *Clave:* `...{key_hint}`\n"
+            f"⏳ *Cooldown:* `{cooldown_minutes} min`\n"
+            f"🔄 *Acción:* Rotando a siguiente clave disponible.\n"
+            f"─────────────────\n"
+            f"⏱ {self._timestamp()}"
+        )
+        await self._send_dev(msg)
+
+
     async def _send_photo(self, photo_bytes: bytes, caption: str = "") -> None:
         """Envía una imagen al chat configurado."""
         if not self._connected or not self._bot:
@@ -520,7 +579,7 @@ class TelegramReporter:
         ax.plot(range(len(eq)), eq, color=color, linewidth=1.5)
         ax.fill_between(range(len(eq)), eq, eq[0], alpha=0.15, color=color)
         ax.axhline(y=eq[0], color="#666", linestyle="--", alpha=0.4)
-        ax.set_title("Weekly Equity Curve", fontsize=12, color="#e0e0e0")
+        ax.set_title("Curva de Equity Semanal", fontsize=12, color="#e0e0e0")
         ax.set_facecolor("#1a1a2e")
         fig.set_facecolor("#0d0d1a")
         ax.tick_params(colors="#999")
