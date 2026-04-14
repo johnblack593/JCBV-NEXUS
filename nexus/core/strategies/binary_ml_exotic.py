@@ -91,11 +91,12 @@ class BinaryMLExoticStrategy(BaseStrategy):
 
             # ── Train/Predict Split ──────────────────────────────────
             feature_cols = ["log_returns", "atr", "rsi"]
-            train_end = min(self.TRAIN_SIZE, len(features_df) - 1)
+            # Leakage-safe split: última fila = predicción, penúltima = buffer
+            train_end = min(self.TRAIN_SIZE, len(features_df) - 2)
 
             X_train = features_df[feature_cols].iloc[:train_end].values
             y_train = features_df["target"].iloc[:train_end].values
-            X_pred = features_df[feature_cols].iloc[train_end:train_end + 1].values
+            X_pred = features_df[feature_cols].iloc[-1:].values
 
             if len(X_train) < 50 or len(X_pred) == 0:
                 return self._hold("Split insuficiente para ML")
@@ -105,7 +106,7 @@ class BinaryMLExoticStrategy(BaseStrategy):
                 n_estimators=self.N_ESTIMATORS,
                 max_depth=5,
                 min_samples_split=10,
-                random_state=42,
+                random_state=None,  # Aleatoriedad real por tick — ensemble válido
                 n_jobs=-1,
             )
             clf.fit(X_train, y_train)
@@ -147,7 +148,8 @@ class BinaryMLExoticStrategy(BaseStrategy):
                     "rf_probability": round(confidence, 4),
                     "feature_importances": importances,
                     "train_samples": len(X_train),
-                    "train_accuracy": round(float(clf.score(X_train, y_train)), 4),
+                    # pred_entropy: 0.0 = certeza total, 1.0 = máxima incertidumbre (2 clases)
+                    "pred_entropy": round(float(-np.sum(proba * np.log2(np.clip(proba, 1e-10, 1.0)))), 4),
                 },
             }
 
@@ -182,8 +184,13 @@ class BinaryMLExoticStrategy(BaseStrategy):
 
         # RSI
         delta = out["close"].diff()
-        gain = delta.where(delta > 0, 0.0).rolling(window=self.RSI_PERIOD).mean()
-        loss = (-delta.where(delta < 0, 0.0)).rolling(window=self.RSI_PERIOD).mean()
+        # Wilder's EWM smoothing — RSI estándar (alpha = 1/period)
+        gain = delta.where(delta > 0, 0.0).ewm(
+            alpha=1.0 / self.RSI_PERIOD, adjust=False
+        ).mean()
+        loss = (-delta.where(delta < 0, 0.0)).ewm(
+            alpha=1.0 / self.RSI_PERIOD, adjust=False
+        ).mean()
         rs = gain / loss.replace(0, np.finfo(float).eps)
         out["rsi"] = 100.0 - (100.0 / (1.0 + rs))
 
@@ -213,9 +220,13 @@ class BinaryMLExoticStrategy(BaseStrategy):
         avg_return = float(np.mean(returns))
 
         if avg_return > 0.001:
-            return {"signal": "BUY", "confidence": 0.5, "reason": "Fallback heurístico (momentum+)", "indicators": {}}
+            return self._hold(
+                f"Fallback heurístico sin sklearn (momentum+={avg_return:.5f}) — HOLD conservador"
+            )
         elif avg_return < -0.001:
-            return {"signal": "SELL", "confidence": 0.5, "reason": "Fallback heurístico (momentum-)", "indicators": {}}
+            return self._hold(
+                f"Fallback heurístico sin sklearn (momentum-={avg_return:.5f}) — HOLD conservador"
+            )
         return self._hold("Fallback: sin momentum claro")
 
     @staticmethod
