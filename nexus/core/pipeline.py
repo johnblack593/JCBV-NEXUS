@@ -212,17 +212,17 @@ class NexusPipeline:
                 min_payout=self._config.get("min_payout", 80),
             )
             await self.opportunity_agent.start()
-            logger.info("🔎 OpportunityAgent started (5 min interval)")
+            logger.info("🔎 AgenteBúsqueda iniciado (intervalo 5 min)")
             
             if self.venue == "BITGET":
                 self._position_manager = PositionManager(self.execution_engine)
                 synced = await self._position_manager.sync_open_positions()
                 logger.info(f"🔄 PositionManager: {synced} open position(s) synced from exchange.")
         else:
-            logger.warning("⚠️ Execution engine no conectado. Pipeline en modo dry-run.")
+            logger.warning("⚠️ Motor de ejecución no conectado. Pipeline en modo simulación.")
 
         logger.info(
-            f"✅ NEXUS Pipeline v5.0 — All 5 layers initialized [{self.venue}]\n"
+            f"✅ NEXUS Pipeline v5.0 — Las 5 capas inicializadas [{self.venue}]\n"
             f"   Config: {self._config}"
         )
 
@@ -242,24 +242,24 @@ class NexusPipeline:
 
     async def run(self) -> None:
         """
-        Main event loop — connects all 5 layers.
+        Bucle principal — conecta las 5 capas del pipeline.
 
-        Flow:
-            1. Check MACRO_REGIME (Layer 2)
-            2. Fetch OHLCV via execution engine
-            3. Strategy-driven signal generation (Layer 3)
-            4. Circuit breaker check (Layer 4)
-            5. Execute CALL/PUT (Layer 5)
-            6. Log to QuestDB + Prometheus
+        Flujo:
+            1. Verificar MACRO_REGIME (Capa 2)
+            2. Obtener OHLCV del motor de ejecución
+            3. Generación de señales por estrategia (Capa 3)
+            4. Verificar circuit breaker (Capa 4)
+            5. Ejecutar CALL/PUT (Capa 5)
+            6. Log en QuestDB + Prometheus
         """
         self._running = True
-        logger.info("🔄 Pipeline main loop started")
+        logger.info("🔄 Bucle principal del pipeline iniciado")
 
         # ── Daily Reset Scheduler ─────────────────────────────────────
         asyncio.create_task(self._daily_reset_loop(), name="daily_reset")
 
         if self.macro_agent:
-            logger.info("Agent => Macro cron loop is already started (Layer 2).")
+            logger.info("Agente → Cron de Macro ya iniciado (Capa 2).")
             
         if self._position_manager:
             asyncio.create_task(
@@ -285,7 +285,7 @@ class NexusPipeline:
                     regime = await self.get_macro_regime()
                     self.telegram.fire_market_briefing(regime.value, best_asset, payout)
             except Exception as exc:
-                logger.debug(f"Could not send market briefing: {exc}")
+                logger.debug(f"No se pudo enviar briefing de mercado: {exc}")
 
         while self._running:
             try:
@@ -312,7 +312,7 @@ class NexusPipeline:
             try:
                 panic = self.redis_client.get("NEXUS:PANIC_MODE")
                 if panic and panic in (b"1", "1"):
-                    logger.warning("🚨 PANIC HALT ACTIVE — All trading suspended via OCP.")
+                    logger.warning("🚨 MODO PÁNICO ACTIVO — Operaciones suspendidas por OCP.")
                     return
             except Exception:
                 pass  # Redis offline — continue without panic check
@@ -342,14 +342,14 @@ class NexusPipeline:
         regime = await self.get_macro_regime()
 
         if regime == MacroRegime.RED:
-            logger.warning("🔴 MACRO REGIME RED — No new trades.")
+            logger.warning("🔴 RÉGIMEN MACRO ROJO — Sin nuevas operaciones.")
             return
 
         # ── Step 2: Check daily trade limit ──────────────────────────
         max_daily = self._config.get("max_daily_trades", 3)
         if self._daily_trades >= max_daily:
             logger.info(
-                f"📊 Daily trade limit reached ({self._daily_trades}/{max_daily})"
+                f"📊 Límite diario alcanzado ({self._daily_trades}/{max_daily})"
             )
             return
 
@@ -369,24 +369,30 @@ class NexusPipeline:
 
         # ── Step 4: Check Circuit Breaker (Layer 4) ──────────────────
         if self.risk_manager and self.risk_manager.is_circuit_breaker_active():
-            logger.warning("🚨 Circuit Breaker ACTIVO — No new trades.")
+            logger.warning("🚨 Circuit Breaker ACTIVO — Sin nuevas operaciones.")
             return
 
-        # ── Step 4b: Max Exposure Check (Layer 4) ────────────────────
+        # ── Step 4b: Verificación de Exposición Máxima (Capa 4) ──────
         if self.risk_manager:
+            try:
+                _balance_exp = await self._safe_get_balance()
+                _prop_pct = (
+                    self._config.get("base_size", 1.0) / max(_balance_exp, 1.0) * 100.0
+                )
+            except Exception:
+                _prop_pct = 1.0
             allowed = self.risk_manager.max_exposure_check(
-                proposed_pct=self._config.get("base_size", 1.0)
-                / max(await self._safe_get_balance(), 1.0)
-                * 100.0
+                proposed_size_pct=_prop_pct,
+                current_exposure_pct=0.0,
             )
             if allowed == 0.0:
-                logger.warning("🛡️ max_exposure_check: exposición total bloqueada — skipping tick.")
+                logger.warning("🛡️ Exposición máxima alcanzada — tick omitido.")
                 return
 
         # ── Step 5: Get Market Data ──────────────────────────────────
         asset, df = await self._get_market_data()
         if df is None or df.empty or len(df) < 30:
-            return  # Insuficient data
+            return  # Datos insuficientes
 
         # ── Step 6: AI Mode — Dynamic Parameter Injection ─────────────
         # If AI_MODE == 1, read regime-optimized params from Redis
@@ -417,14 +423,14 @@ class NexusPipeline:
         min_conf = self._config.get("min_confidence", 0.55)
         if confidence < min_conf:
             logger.debug(
-                f"Signal {signal_dir} conf={confidence:.3f} < {min_conf}. Skipping."
+                f"Señal {signal_dir} conf={confidence:.3f} < {min_conf}. Omitida."
             )
             return
 
         # ── Step 8: Regime-Aware Adjustments ─────────────────────────
         if regime == MacroRegime.YELLOW:
             confidence *= 0.8  # Reduce confidence 20%
-            logger.info("🟡 YELLOW regime — confidence reduced 20%")
+            logger.info("🟡 RÉGIMEN AMARILLO — confianza reducida 20%")
 
         # ── Step 9: Position Sizing (Layer 4) ────────────────────────
         size = await self._calculate_size(confidence, df)
@@ -488,8 +494,8 @@ class NexusPipeline:
             try:
                 result = await self.execution_engine.execute(trade_signal)
             except Exception as exc:
-                logger.error(f"Execution failed: {exc}", exc_info=True)
-                self.telegram.fire_system_error(f"Execution failed: {exc}", module="execution_engine")
+                logger.error(f"Ejecución fallida: {exc}", exc_info=True)
+                self.telegram.fire_system_error(f"Ejecución fallida: {exc}", module="execution_engine")
                 return
             latency = (time.perf_counter() - t_start) * 1000
 
@@ -585,7 +591,7 @@ class NexusPipeline:
             asset = await self.opportunity_agent.get_best_asset()
 
         if not asset:
-            logger.debug("No asset available from OpportunityAgent. Skipping tick.")
+            logger.debug("Sin activo disponible del AgenteOportunidad. Omitiendo tick.")
             return None, pd.DataFrame()
 
         # Fetch OHLCV — only network call in the tick path
@@ -594,7 +600,7 @@ class NexusPipeline:
             if df is not None and len(df) >= 30:
                 return asset, df
         except Exception as exc:
-            logger.debug(f"Data fetch failed for {asset}: {exc}")
+            logger.debug(f"Fallo al obtener datos de {asset}: {exc}")
 
         return None, pd.DataFrame()
 
@@ -657,7 +663,7 @@ class NexusPipeline:
         try:
             current_price = float(df["close"].iloc[-1])
         except Exception:
-            logger.warning("Bitget sizing: could not read current price. Skipping.")
+            logger.warning("Sizing Bitget: no se pudo leer precio actual. Omitiendo.")
             return 0.0
 
         if current_price <= 0:
@@ -723,7 +729,7 @@ class NexusPipeline:
     def _log_execution(
         self, result: TradeResult, signal: TradeSignal, total_latency_ms: float
     ) -> None:
-        """Logs trade execution with full details."""
+        """Registra la ejecución del trade con detalle completo."""
         symbol = f"{'✅' if result.status == ExecutionStatus.FILLED else '❌'}"
         logger.info(
             f"{symbol} TRADE | {result.venue.value} | {result.asset} "
@@ -757,7 +763,7 @@ class NexusPipeline:
                 "status": result.status.value,
             })
         except Exception as exc:
-            logger.debug(f"QuestDB trade persistence failed: {exc}")
+            logger.debug(f"Fallo al persistir trade en QuestDB: {exc}")
 
     # ══════════════════════════════════════════════════════════════════
     #  Session Management
@@ -766,7 +772,7 @@ class NexusPipeline:
     def reset_daily_counters(self) -> None:
         """Resetear contadores diarios (llamar a las 00:00 UTC)."""
         self._daily_trades = 0
-        logger.info("📊 Daily counters reset")
+        logger.info("📊 Contadores diarios reseteados")
 
     def get_session_stats(self) -> Dict[str, Any]:
         """Retorna estadísticas de la sesión actual."""
@@ -801,7 +807,7 @@ class NexusPipeline:
             seconds_until_midnight = (next_midnight - now).total_seconds()
             await asyncio.sleep(seconds_until_midnight)
             self.reset_daily_counters()
-            logger.info("📅 Daily counters reset at UTC midnight.")
+            logger.info("📅 Contadores diarios reseteados a medianoche UTC.")
 
     async def _safe_get_balance(self) -> float:
         """Balance con fallback seguro para guardianes de riesgo."""
