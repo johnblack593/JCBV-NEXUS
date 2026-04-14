@@ -1,10 +1,18 @@
 """
-NEXUS Trading System — Data Handler
-=====================================
-Conexión WebSocket a Binance Futures, ingestión y limpieza de datos
-de mercado en tiempo real, almacenamiento en SQLite vía SQLAlchemy.
+NEXUS Trading System — Bitget Data Handler
+==========================================
+Fuente de datos primaria: Bitget USDT-M Futures (LIVE y DEMO)
 
-Usa python-binance AsyncClient para operaciones no bloqueantes.
+Arquitectura:
+  BitgetDataHandler       → Handler principal, lifecycle, API
+  ├── DataStore           → Persistencia SQLite (reutilizado de v1)
+  ├── DataCleaner         → Normalización OHLCV (mejorado de v1)
+  ├── _ws_kline_loop()    → WebSocket Bitget con reconexión
+  └── _alt_data_loop()    → Polling REST funding + orderbook
+
+Modo demo:
+  BITGET_DEMO_MODE=true  → productType=SUSDT-FUTURES
+  BITGET_DEMO_MODE=false → productType=USDT-FUTURES
 """
 
 from __future__ import annotations
@@ -28,27 +36,56 @@ from sqlalchemy import (  # type: ignore
     text,
 )
 from sqlalchemy.orm import Session, declarative_base, sessionmaker  # type: ignore
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert # type: ignore
 
-from binance import AsyncClient, BinanceSocketManager  # type: ignore
-from binance.enums import HistoricalKlinesType  # type: ignore
+import websockets  # type: ignore
+import aiohttp     # type: ignore
+import json
 
-from config.settings import (  # type: ignore
-    BINANCE_API_KEY,
-    BINANCE_API_SECRET,
+from nexus.config.settings import (  # type: ignore
+    BITGET_API_KEY,
+    BITGET_API_SECRET,
+    BITGET_API_PASSPHRASE,
+    BITGET_DEMO_MODE,
     trading_config,
 )
 
 logger = logging.getLogger("nexus.data_handler")
 
 # ──────────────────────────────────────────────────────────────────────
-#  SQLAlchemy Model
+#  Constantes
+# ──────────────────────────────────────────────────────────────────────
+
+BITGET_WS_PUBLIC = "wss://ws.bitget.com/v2/ws/public"
+BITGET_REST_BASE = "https://api.bitget.com"
+
+PRODUCT_TYPE_LIVE = "USDT-FUTURES"
+PRODUCT_TYPE_DEMO = "SUSDT-FUTURES"
+
+# Mapa de timeframes NEXUS → Bitget granularity
+_TF_MAP: Dict[str, str] = {
+    "1m":  "1m",
+    "3m":  "3m",
+    "5m":  "5m",
+    "15m": "15m",
+    "30m": "30m",
+    "1h":  "1H",
+    "2h":  "2H",
+    "4h":  "4H",
+    "6h":  "6H",
+    "12h": "12H",
+    "1d":  "1Dutc",
+    "1w":  "1Wutc",
+}
+
+# ──────────────────────────────────────────────────────────────────────
+#  DataStore — SQLite persistence (SQLAlchemy Model)
 # ──────────────────────────────────────────────────────────────────────
 
 Base = declarative_base()
 
-
 class KlineRecord(Base):
-    """Modelo SQLAlchemy para almacenar velas OHLCV."""
+    """Modelo SQLAlchemy para almacenar velas OHLCV (Bitget)."""
 
     __tablename__ = "klines"
 
@@ -64,17 +101,11 @@ class KlineRecord(Base):
     close_time = Column(DateTime, nullable=False)
     quote_volume = Column(Float, nullable=False)
     num_trades = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint("symbol", "interval", "open_time", name="uq_kline"),
     )
-
-
-# ──────────────────────────────────────────────────────────────────────
-#  DataStore — SQLite persistence
-# ──────────────────────────────────────────────────────────────────────
-
 
 class DataStore:
     """Almacenamiento persistente de datos de mercado con SQLAlchemy + SQLite."""
@@ -83,8 +114,6 @@ class DataStore:
         self.db_path = db_path
         self._engine = None
         self._SessionFactory = None
-
-    # ── lifecycle ─────────────────────────────────────────────────────
 
     def initialize(self) -> None:
         """Crea engine, session factory y tablas si no existen."""
@@ -100,10 +129,8 @@ class DataStore:
     def _session(self) -> Session:
         return self._SessionFactory()  # type: ignore
 
-    # ── write ─────────────────────────────────────────────────────────
-
     def save_klines(self, symbol: str, interval: str, df: pd.DataFrame) -> int:
-        """Persiste un DataFrame de velas.  Retorna filas insertadas."""
+        """Persiste un DataFrame de velas usando INSERT OR IGNORE."""
         if df.empty:
             return 0
 
@@ -111,33 +138,24 @@ class DataStore:
         inserted = 0
         try:
             for _, row in df.iterrows():
-                # Upsert — ignorar duplicados
-                exists = (
-                    session.query(KlineRecord)
-                    .filter_by(
-                        symbol=symbol,
-                        interval=interval,
-                        open_time=row["open_time"],
-                    )
-                    .first()
+                row_dict = {
+                    "symbol": symbol,
+                    "interval": interval,
+                    "open_time": row["open_time"],
+                    "open": float(row["open"]),
+                    "high": float(row["high"]),
+                    "low": float(row["low"]),
+                    "close": float(row["close"]),
+                    "volume": float(row["volume"]),
+                    "close_time": row["close_time"],
+                    "quote_volume": float(row.get("quote_volume", 0)),
+                    "num_trades": int(row.get("num_trades", 0))
+                }
+                stmt = sqlite_insert(KlineRecord).values(row_dict)
+                stmt = stmt.on_conflict_do_nothing(
+                    index_elements=["symbol", "interval", "open_time"]
                 )
-                if exists:
-                    continue
-
-                record = KlineRecord(
-                    symbol=symbol,  # type: ignore
-                    interval=interval,  # type: ignore
-                    open_time=row["open_time"],  # type: ignore
-                    open=float(row["open"]),  # type: ignore
-                    high=float(row["high"]),  # type: ignore
-                    low=float(row["low"]),  # type: ignore
-                    close=float(row["close"]),  # type: ignore
-                    volume=float(row["volume"]),  # type: ignore
-                    close_time=row["close_time"],  # type: ignore
-                    quote_volume=float(row.get("quote_volume", 0)),  # type: ignore
-                    num_trades=int(row.get("num_trades", 0)),  # type: ignore
-                )
-                session.add(record)
+                session.execute(stmt)
                 inserted += 1
             session.commit()
         except Exception:
@@ -148,8 +166,6 @@ class DataStore:
 
         logger.debug("Guardadas %d velas [%s %s]", inserted, symbol, interval)
         return inserted
-
-    # ── read ──────────────────────────────────────────────────────────
 
     def load_klines(
         self,
@@ -210,29 +226,31 @@ class DataStore:
         finally:
             session.close()
 
-
 # ──────────────────────────────────────────────────────────────────────
 #  DataCleaner — limpieza y normalización
 # ──────────────────────────────────────────────────────────────────────
-
 
 class DataCleaner:
     """Limpieza, normalización y detección de outliers para datos OHLCV."""
 
     @staticmethod
-    def clean_kline_row(raw: Dict[str, Any]) -> Dict[str, Any]:
-        """Limpia y valida una vela cruda tal como llega del WebSocket."""
+    def clean_kline_row(raw: List[Any]) -> Dict[str, Any]:
+        """
+        Calcula y limpia una vela cruda tal como llega de Bitget.
+        Formato de lista Bitget: [ts(str), open, high, low, close, baseVolume, quoteVolume]
+        """
+        ts = int(raw[0])
         return {
-            "open_time": datetime.fromtimestamp(raw["t"] / 1000, tz=timezone.utc),
-            "open": float(raw["o"]),
-            "high": float(raw["h"]),
-            "low": float(raw["l"]),
-            "close": float(raw["c"]),
-            "volume": float(raw["v"]),
-            "close_time": datetime.fromtimestamp(raw["T"] / 1000, tz=timezone.utc),
-            "quote_volume": float(raw.get("q", 0)),
-            "num_trades": int(raw.get("n", 0)),
-            "is_closed": raw.get("x", False),
+            "open_time": datetime.fromtimestamp(ts / 1000, tz=timezone.utc),
+            "open": float(raw[1]),
+            "high": float(raw[2]),
+            "low": float(raw[3]),
+            "close": float(raw[4]),
+            "volume": float(raw[5]),
+            "close_time": datetime.fromtimestamp(ts / 1000, tz=timezone.utc), # aproximado en Bitget
+            "quote_volume": float(raw[6]) if len(raw) > 6 else 0.0,
+            "num_trades": 0,
+            "ts_ms": ts, # Usado internamente para trackear cambios
         }
 
     @staticmethod
@@ -241,197 +259,172 @@ class DataCleaner:
         column: str = "close",
         z_threshold: float = 3.0,
     ) -> pd.DataFrame:
-        """Marca outliers basándose en z-score.  Añade columna 'is_outlier'."""
+        """Marca outliers basándose en z-score rolling."""
         if df.empty or column not in df.columns:
             return df
 
         df = df.copy()
-        mean = df[column].mean()
-        std = df[column].std()
-        if std == 0:
-            df["is_outlier"] = False
-            return df
-
-        df["z_score"] = (df[column] - mean) / std
+        
+        # FIX: Rolling z-score evita penalizar el precio de mercado con tendencia
+        df["rolling_mean"] = df[column].rolling(window=100, min_periods=20).mean()
+        df["rolling_std"] = df[column].rolling(window=100, min_periods=20).std()
+        
+        # Evitar divisiones por cero o NaNs
+        df["rolling_std"] = df["rolling_std"].replace(0, np.nan)
+        
+        df["z_score"] = (df[column] - df["rolling_mean"]) / df["rolling_std"]
         df["is_outlier"] = df["z_score"].abs() > z_threshold
+        df = df.drop(columns=["rolling_mean", "rolling_std"])
+        
         outlier_count = df["is_outlier"].sum()
-        if outlier_count:
+        if outlier_count > 0:
             logger.warning(
-                "Detectados %d outliers en columna '%s' (z > %.1f)",
-                outlier_count,
-                column,
-                z_threshold,
+                "Detectados %d outliers in '%s'",
+                int(outlier_count),
+                column
             )
         return df
 
     @staticmethod
-    def fill_gaps(df: pd.DataFrame, freq: str = "1min") -> pd.DataFrame:
-        """Rellena huecos temporales con forward-fill."""
+    def fill_gaps(df: pd.DataFrame, freq: str = "1min", max_fill_periods: int = 10) -> pd.DataFrame:
+        """Rellena huecos temporales con forward-fill hasta un límite de periodos."""
         if df.empty:
             return df
         df = df.copy()
         df = df.set_index("open_time")
         df = df.asfreq(freq)
-        df[["open", "high", "low", "close"]] = df[
-            ["open", "high", "low", "close"]
-        ].ffill()
+        
+        df[["open", "high", "low", "close"]] = df[["open", "high", "low", "close"]].ffill(limit=max_fill_periods)
         df["volume"] = df["volume"].fillna(0)
         df = df.reset_index()
+        
+        if df[["close"]].isna().sum().sum() > 0:
+            logger.critical("Gap mayor a %d periodos detectado en data", max_fill_periods)
+            
         return df
 
     @staticmethod
     def clean_data(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Pipeline completo de limpieza:
-        1. Elimina filas con NaN en OHLCV
-        2. Convierte tipos numéricos
-        3. Detecta y filtra outliers
-        4. Ordena por timestamp
-        """
+        """Pipeline completo de limpieza."""
         if df.empty:
             return df
 
         df = df.copy()
 
-        # 1. Asegurar tipos numéricos
         numeric_cols = ["open", "high", "low", "close", "volume"]
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
-        # 2. Eliminar filas con NaN en columnas OHLCV
         before = len(df)
         df = df.dropna(subset=numeric_cols)
         dropped = before - len(df)
         if dropped:
             logger.info("Eliminadas %d filas con NaN", dropped)
 
-        # 3. Validar coherencia OHLC  (high >= low, etc.)
         mask_invalid = (df["high"] < df["low"]) | (df["volume"] < 0)
         invalid_count = mask_invalid.sum()
         if invalid_count:
             logger.warning("Eliminadas %d filas con OHLC incoherente", invalid_count)
             df = df[~mask_invalid]
 
-        # 4. Detectar outliers (marcar, no eliminar)
         df = DataCleaner.detect_outliers(df, column="close")
 
-        # 5. Ordenar por timestamp
         if "open_time" in df.columns:
             df = df.sort_values("open_time").reset_index(drop=True)
 
         return df
 
-
 # ──────────────────────────────────────────────────────────────────────
-#  BinanceDataHandler — clase principal
+#  BitgetDataHandler
 # ──────────────────────────────────────────────────────────────────────
 
-# Mapeo de intervalos Binance → python-binance constants
-_INTERVAL_MAP: Dict[str, str] = {
-    "1m": AsyncClient.KLINE_INTERVAL_1MINUTE,
-    "3m": AsyncClient.KLINE_INTERVAL_3MINUTE,
-    "5m": AsyncClient.KLINE_INTERVAL_5MINUTE,
-    "15m": AsyncClient.KLINE_INTERVAL_15MINUTE,
-    "30m": AsyncClient.KLINE_INTERVAL_30MINUTE,
-    "1h": AsyncClient.KLINE_INTERVAL_1HOUR,
-    "2h": AsyncClient.KLINE_INTERVAL_2HOUR,
-    "4h": AsyncClient.KLINE_INTERVAL_4HOUR,
-    "1d": AsyncClient.KLINE_INTERVAL_1DAY,
-    "1w": AsyncClient.KLINE_INTERVAL_1WEEK,
-}
-
-
-class BinanceDataHandler:
+class BitgetDataHandler:
     """
-    Handler principal de datos de Binance Futures.
-
-    Responsabilidades:
-    - Conexión WebSocket para klines en tiempo real (multi-timeframe)
-    - Descarga de datos históricos (hasta 3 años)
-    - Limpieza y normalización
-    - Persistencia en SQLite local
-
+    Handler principal de datos de Bitget Futures.
+    
+    Fuente de datos primaria del sistema NEXUS v5.0.
+    Soporta modo LIVE (USDT-FUTURES) y DEMO (SUSDT-FUTURES).
+    
+    IMPORTANTE sobre modo demo:
+    - En SUSDT-FUTURES los símbolos tienen prefijo S: SBTCUSDT
+    - Los datos son reales de mercado, solo el balance es simulado
+    - Para datos históricos REST, el productType cambia en la URL
+    
     Uso:
-        handler = BinanceDataHandler()
+        handler = BitgetDataHandler()
         await handler.start()
-
-        # Tiempo real
         df = handler.get_realtime_klines("BTCUSDT", "1m")
-
-        # Históricos
-        df = await handler.get_historical_data("BTCUSDT", "1h", "1 Jan 2023")
-
+        df = await handler.get_historical_data("BTCUSDT", "1h")
         await handler.stop()
     """
 
-    DEFAULT_SYMBOL = "BTCUSDT"
-    DEFAULT_TIMEFRAMES = ("1m", "5m", "1h", "4h")
+    WS_URL = BITGET_WS_PUBLIC
     MAX_RECONNECT_ATTEMPTS = 10
-    RECONNECT_BASE_DELAY = 2          # segundos (exponencial)
+    RECONNECT_BASE_DELAY = 2  # segundos, backoff exponencial
+    BUFFER_MAXLEN = 1500      # velas por par/timeframe en memoria
 
     def __init__(
         self,
         symbols: Optional[List[str]] = None,
-        timeframes: Optional[Tuple[str, ...]] = None,
+        timeframes: Optional[List[str]] = None,
         db_path: str = "nexus_data.db",
         api_key: str = "",
         api_secret: str = "",
+        api_passphrase: str = "",
+        demo_mode: Optional[bool] = None,
     ) -> None:
-        self.symbols = symbols or [self.DEFAULT_SYMBOL]
-        self.timeframes = timeframes or self.DEFAULT_TIMEFRAMES
-        self.api_key = api_key or BINANCE_API_KEY
-        self.api_secret = api_secret or BINANCE_API_SECRET
+        self.symbols = symbols or ["BTCUSDT"]
+        self.timeframes = timeframes or ["1m", "5m", "1h", "4h"]
+        self.api_key = api_key or BITGET_API_KEY
+        self.api_secret = api_secret or BITGET_API_SECRET
+        self.api_passphrase = api_passphrase or BITGET_API_PASSPHRASE
+        
+        self.demo_mode = demo_mode if demo_mode is not None else BITGET_DEMO_MODE
+        self.product_type = PRODUCT_TYPE_DEMO if self.demo_mode else PRODUCT_TYPE_LIVE
 
-        # Almacenamiento
         self.store = DataStore(db_path=db_path)
         self.cleaner = DataCleaner()
 
-        # AsyncClient & WebSocket
-        self._client: Optional[AsyncClient] = None
-        self._bsm: Optional[BinanceSocketManager] = None
-
-        # Buffers en memoria: colas para appends en O(1)
-        self._realtime_buffers: Dict[Tuple[str, str], deque] = defaultdict(lambda: deque(maxlen=1500))  # type: ignore
-
-        # Alt-Data Buffers (Microestructura)
+        self._realtime_buffers: Dict[Tuple[str, str], deque] = defaultdict(lambda: deque(maxlen=self.BUFFER_MAXLEN))
         self._orderbook_data: Dict[str, Dict[str, Any]] = defaultdict(dict)
         self._funding_rates: Dict[str, float] = defaultdict(float)
 
-        # Control
         self._ws_tasks: List[asyncio.Task] = []
         self._running = False
-        self._reconnect_count = 0
         self._subscribers: List[Callable] = []
+        self._session: Optional[aiohttp.ClientSession] = None
+        
+        num_symbols = len(self.symbols)
+        self._alt_data_interval = max(3.0, num_symbols * 0.15)
 
-    # ══════════════════════════════════════════════════════════════════
-    #  Lifecycle
-    # ══════════════════════════════════════════════════════════════════
+    def _resolve_symbol(self, symbol: str) -> str:
+        """
+        Resuelve el símbolo correcto según el modo de operación.
+        LIVE: BTCUSDT  →  BTCUSDT
+        DEMO: BTCUSDT  →  SBTCUSDT (prefijo S requerido por Bitget)
+        """
+        symbol_upper = symbol.upper()
+        if self.demo_mode and not symbol_upper.startswith("S"):
+            return f"S{symbol_upper}"
+        return symbol_upper
 
     async def start(self) -> None:
-        """Inicializa la conexión async, la DB y lanza los WebSockets."""
-        logger.info("Iniciando BinanceDataHandler...")
-
-        # 1. SQLite
+        """Inicializa DB, crea session aiohttp, lanza WebSocket tasks."""
+        logger.info("Iniciando BitgetDataHandler (product_type=%s)", self.product_type)
         self.store.initialize()
-
-        # 2. AsyncClient — con DNS resiliente y retry
-        self._client = await self._create_client_with_retry()
-
-        # 3. BinanceSocketManager
-        self._bsm = BinanceSocketManager(self._client)
-
-        # 4. Lanzar un WebSocket por cada (symbol, timeframe)
+        self._session = aiohttp.ClientSession()
         self._running = True
-        for symbol in self.symbols:
+
+        for base_sym in self.symbols:
+            sym = self._resolve_symbol(base_sym)
             for tf in self.timeframes:
                 task = asyncio.create_task(
-                    self._ws_kline_loop(symbol, tf),
-                    name=f"ws_{symbol}_{tf}",
+                    self._ws_kline_loop(sym, tf),
+                    name=f"ws_{sym}_{tf}"
                 )
                 self._ws_tasks.append(task)
-                
-        # 5. Alt-Data polling loop
+
         alt_data_task = asyncio.create_task(
             self._alt_data_loop(),
             name="alt_data_polling"
@@ -440,65 +433,14 @@ class BinanceDataHandler:
 
         logger.info(
             "WebSocket activo para %d streams (%s × %s)",
-            len(self._ws_tasks),
+            len(self._ws_tasks) - 1,
             self.symbols,
-            list(self.timeframes),
-        )
-
-    async def _create_client_with_retry(self, max_retries: int = 5) -> AsyncClient:  # type: ignore
-        """
-        Crea el AsyncClient de Binance con resiliencia de grado institucional.
-
-        Soluciona el bug conocido de aiodns/pycares en Windows donde c-ares
-        no puede contactar los DNS del sistema operativo. Fuerza el uso del
-        ThreadedResolver (nativo del OS) y aplica retry con backoff exponencial.
-        """
-        import aiohttp  # type: ignore
-        import aiohttp.resolver  # type: ignore
-
-        # ── Fix: Forzar ThreadedResolver como default para TODO el proceso ──
-        # Cuando aiodns está instalado, aiohttp usa AsyncResolver (c-ares)
-        # como DefaultResolver. En Windows, c-ares falla con
-        # "Could not contact DNS servers" porque no lee la config DNS del OS.
-        # Parcheamos el DefaultResolver a nivel de módulo para que
-        # python-binance (que crea su propio ClientSession internamente)
-        # use el resolver del sistema operativo automáticamente.
-        aiohttp.resolver.DefaultResolver = aiohttp.resolver.ThreadedResolver  # type: ignore
-        logger.info("DNS Resolver parcheado → ThreadedResolver (OS-native)")
-
-        last_error: Optional[Exception] = None
-
-        for attempt in range(1, max_retries + 1):
-            try:
-                logger.info(
-                    "Conectando a Binance API (intento %d/%d)...",
-                    attempt, max_retries,
-                )
-                client = await AsyncClient.create(
-                    api_key=self.api_key,
-                    api_secret=self.api_secret,
-                )
-                logger.info("✅ Conexión a Binance API establecida exitosamente.")
-                return client
-
-            except Exception as exc:
-                last_error = exc
-                backoff = min(2 ** attempt, 30)  # 2, 4, 8, 16, 30 segundos
-                logger.warning(
-                    "⚠️ Intento %d/%d fallido: %s — reintentando en %ds...",
-                    attempt, max_retries, exc, backoff,
-                )
-                await asyncio.sleep(backoff)
-
-        # Si todos los intentos fallan, lanzar el error original
-        raise ConnectionError(
-            f"No se pudo conectar a Binance API después de {max_retries} intentos. "
-            f"Último error: {last_error}"
+            self.timeframes,
         )
 
     async def stop(self) -> None:
-        """Detiene los WebSockets y cierra el AsyncClient."""
-        logger.info("Deteniendo BinanceDataHandler...")
+        """Cancela tasks, cierra aiohttp session, cierra DB engine."""
+        logger.info("Deteniendo BitgetDataHandler...")
         self._running = False
 
         for task in self._ws_tasks:
@@ -506,204 +448,153 @@ class BinanceDataHandler:
         await asyncio.gather(*self._ws_tasks, return_exceptions=True)
         self._ws_tasks.clear()
 
-        if self._client:
-            await self._client.close_connection()  # type: ignore
-            self._client = None
+        if self._session:
+            await self._session.close()
+            self._session = None
 
-        logger.info("BinanceDataHandler detenido.")
-
-    # ══════════════════════════════════════════════════════════════════
-    #  WebSocket — klines en tiempo real
-    # ══════════════════════════════════════════════════════════════════
+        logger.info("BitgetDataHandler detenido.")
 
     async def _ws_kline_loop(self, symbol: str, interval: str) -> None:
         """
-        Loop de reconexión automática para un stream de klines.
-        Implementa back-off exponencial en caso de desconexión.
+        Loop de reconexión para stream de klines via WebSocket Bitget.
+        
+        REGLA CRÍTICA anti-lookahead:
+        Bitget envía updates de la vela abierta con cada tick.
+        La vela se considera CERRADA cuando llega un nuevo timestamp
+        (el ts_ms cambia respecto a la última vela del buffer).
+        NUNCA usar la última vela del buffer en signal_engine —
+        siempre usar df.iloc[:-1] para excluir la vela abierta.
         """
         attempt = 0
+        bg_interval = _TF_MAP.get(interval, "1m")
+        channel = f"candle{bg_interval}"
+
+        subscribe_msg = {
+            "op": "subscribe",
+            "args": [{
+                "instType": self.product_type,
+                "channel": channel,
+                "instId": symbol
+            }]
+        }
 
         while self._running:
             try:
                 attempt += 1
-                logger.info(
-                    "Conectando WebSocket kline %s %s (intento %d)...",
-                    symbol,
-                    interval,
-                    attempt,
-                )
-
-                kline_socket = self._bsm.kline_futures_socket(  # type: ignore
-                    symbol=symbol,
-                    interval=_INTERVAL_MAP.get(interval, interval),
-                )
-                async with kline_socket as stream:
-                    attempt = 0  # reset on successful connect
-                    self._reconnect_count = 0
-                    logger.info(
-                        "✅ WebSocket conectado: %s %s", symbol, interval
-                    )
-
+                async with websockets.connect(self.WS_URL, ping_interval=30) as ws:
+                    attempt = 0
+                    await ws.send(json.dumps(subscribe_msg))
+                    logger.info("✅ WebSocket conectado: %s %s", symbol, interval)
+                    
                     while self._running:
-                        msg = await asyncio.wait_for(stream.recv(), timeout=60)
-                        if msg is None:
-                            break
-
-                        if "e" in msg and msg["e"] == "error":  # type: ignore
+                        msg_str = await asyncio.wait_for(ws.recv(), timeout=65)
+                        if msg_str == "pong":
+                            continue
+                        
+                        msg = json.loads(msg_str)
+                        if msg.get("event") == "error":
                             logger.error("Error en stream: %s", msg)
                             break
-
-                        await self._handle_kline_msg(msg, symbol, interval)  # type: ignore
+                            
+                        if "action" in msg and msg["action"] in ["snapshot", "update"]:
+                            await self._handle_ws_message(msg, symbol, interval)
 
             except asyncio.CancelledError:
-                logger.debug("WebSocket %s %s cancelado.", symbol, interval)
-                return
+                break
+            except Exception as e:
+                if not self._running:
+                    break
+                logger.error("Error en WebSocket %s %s: %s — reconectando...", symbol, interval, e)
+                if attempt > self.MAX_RECONNECT_ATTEMPTS:
+                    logger.critical("❌ Máximo de reconexiones alcanzado para %s", symbol)
+                    break
+                delay = min(self.RECONNECT_BASE_DELAY ** attempt, 300)
+                await asyncio.sleep(delay)
 
-            except asyncio.TimeoutError:
-                logger.warning(
-                    "Timeout en WebSocket %s %s, reconectando...",
-                    symbol,
-                    interval,
-                )
-
-            except Exception as exc:
-                logger.error(
-                    "Error en WebSocket %s %s: %s — reconectando...",
-                    symbol,
-                    interval,
-                    exc,
-                )
-
-            # ── Back-off exponencial ──
-            if not self._running:
-                return
-
-            if attempt > self.MAX_RECONNECT_ATTEMPTS:
-                logger.critical(
-                    "❌ Máximo de reconexiones alcanzado para %s %s",
-                    symbol,
-                    interval,
-                )
-                return
-
-            delay = min(self.RECONNECT_BASE_DELAY ** attempt, 300)
-            logger.info("Reintentando en %.0f s...", delay)
-            await asyncio.sleep(delay)
-
-    async def _handle_kline_msg(
-        self,
-        msg: Dict[str, Any],
-        symbol: str,
-        interval: str,
-    ) -> None:
-        """Procesa un mensaje de kline, actualiza el buffer y persiste si cerrada."""
-        kline_data = msg.get("k")
-        if not kline_data:
+    async def _handle_ws_message(self, msg: dict, symbol: str, interval: str) -> None:
+        """
+        Procesa mensaje WS, actualiza buffer, persiste velas cerradas y 
+        dispara suscripciones en base al avance de timestamps.
+        """
+        data = msg.get("data", [])
+        if not data:
             return
 
-        cleaned = self.cleaner.clean_kline_row(kline_data)
-        is_closed = cleaned.pop("is_closed", False)
-
         key = (symbol, interval)
-
-        # Actualizar buffer en memoria (O(1) list operations)
         buf = self._realtime_buffers[key]
-        
-        # Si la vela tiene el mismo open_time que la anterior, actualizarla (vela abierta)
-        if buf and buf[-1]["open_time"] == cleaned["open_time"]:
-            buf[-1] = cleaned
-        else:
-            buf.append(cleaned)
 
-        # Persistir solo velas cerradas
-        if is_closed:
-            new_row_df = pd.DataFrame([cleaned])
-            self.store.save_klines(symbol, interval, new_row_df)
-
-            # Notificar suscriptores
-            for callback in self._subscribers:
-                try:
-                    callback(symbol, interval, cleaned)
-                except Exception as exc:
-                    logger.error("Error en subscriber: %s", exc)
-
-    # ══════════════════════════════════════════════════════════════════
-    #  Datos en tiempo real (Alt-Data & Order Book)
-    # ══════════════════════════════════════════════════════════════════
+        for raw_kline in data:
+            cleaned = self.cleaner.clean_kline_row(raw_kline)
+            ts_ms = cleaned.pop("ts_ms")
+            
+            # Anti-lookahead & close state detection
+            if buf:
+                last_kline = buf[-1]
+                last_ts = int(last_kline["open_time"].timestamp() * 1000)
+                
+                if ts_ms > last_ts:
+                    # New candle arrived, previous is closed
+                    closed_kline = last_kline
+                    new_row_df = pd.DataFrame([closed_kline])
+                    self.store.save_klines(symbol, interval, new_row_df)
+                    
+                    for cb in self._subscribers:
+                        try:
+                            cb(symbol, interval, closed_kline)
+                        except Exception as e:
+                            logger.error("Error en subscriber: %s", e)
+                            
+            if buf and int(buf[-1]["open_time"].timestamp() * 1000) == ts_ms:
+                buf[-1] = cleaned
+            else:
+                buf.append(cleaned)
 
     async def _alt_data_loop(self) -> None:
-        """Loop asíncrono para pollear datos alternativos (OrderBook L1 y Funding) desde REST."""
+        """
+        Polling REST de datos alternativos (Order book + Funding rates).
+        """
         while self._running:
             try:
-                for symbol in self.symbols:
-                    # Traer orderbook tick (weight: 2)
-                    ticker = await self._client.futures_book_ticker(symbol=symbol)  # type: ignore
-                    bid_qty = float(ticker.get("bidQty", 0))
-                    ask_qty = float(ticker.get("askQty", 0))
-                    total_qty = bid_qty + ask_qty
-                    imbalance = (bid_qty - ask_qty) / total_qty if total_qty > 0 else 0.0
+                for base_sym in self.symbols:
+                    sym = self._resolve_symbol(base_sym)
+                    if not self._session:
+                        break
 
-                    self._orderbook_data[symbol] = {
-                        "bidPrice": float(ticker.get("bidPrice", 0)),
-                        "bidQty": bid_qty,
-                        "askPrice": float(ticker.get("askPrice", 0)),
-                        "askQty": ask_qty,
-                        "imbalance": round(imbalance, 4)  # type: ignore
-                    }
+                    # 1. Funding rate
+                    url_fund = f"{BITGET_REST_BASE}/api/v2/mix/market/current-fund-rate?symbol={sym}&productType={self.product_type}"
+                    async with self._session.get(url_fund) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            if data.get("code") == "00000" and data.get("data"):
+                                f_rate = float(data["data"][0].get("fundingRate", 0.0))
+                                self._funding_rates[sym] = f_rate
 
-                    # Traer Funding Rate (via mark_price, weight: 1)
-                    mark = await self._client.futures_mark_price(symbol=symbol)  # type: ignore
-                    self._funding_rates[symbol] = float(mark.get("lastFundingRate", 0.0))
-
+                    # 2. Order book merge depth
+                    url_depth = f"{BITGET_REST_BASE}/api/v2/mix/market/merge-depth?symbol={sym}&productType={self.product_type}&limit=1"
+                    async with self._session.get(url_depth) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            if data.get("code") == "00000" and data.get("data"):
+                                d = data["data"][0]
+                                bid_qty = float(d["bids"][0][1]) if d.get("bids") else 0.0
+                                bid_px = float(d["bids"][0][0]) if d.get("bids") else 0.0
+                                ask_qty = float(d["asks"][0][1]) if d.get("asks") else 0.0
+                                ask_px = float(d["asks"][0][0]) if d.get("asks") else 0.0
+                                total_qty = bid_qty + ask_qty
+                                imb = (bid_qty - ask_qty) / total_qty if total_qty > 0 else 0.0
+                                self._orderbook_data[sym] = {
+                                    "bidPrice": bid_px,
+                                    "bidQty": bid_qty,
+                                    "askPrice": ask_px,
+                                    "askQty": ask_qty,
+                                    "imbalance": round(imb, 4)
+                                }
             except asyncio.CancelledError:
-                return
+                break
             except Exception as exc:
                 logger.debug("Error polleando Alt-Data: %s", exc)
 
-            await asyncio.sleep(2.0)  # Polling relajado cada 2s
-            
-    def get_alternative_data(self, symbol: str) -> Dict[str, Any]:
-        """Retorna la microestructura actual para el símbolo (Imbalance y Funding Rate)."""
-        return {
-            "orderbook": self._orderbook_data.get(symbol, {}),
-            "funding_rate": self._funding_rates.get(symbol, 0.0)
-        }
-
-    # ══════════════════════════════════════════════════════════════════
-    #  Datos en tiempo real (Klines)
-    # ══════════════════════════════════════════════════════════════════
-
-    def get_realtime_klines(
-        self,
-        symbol: str = "BTCUSDT",
-        interval: str = "1m",
-    ) -> pd.DataFrame:
-        """
-        Retorna un DataFrame OHLCV con los datos en tiempo real
-        acumulados en el buffer de memoria para el par/intervalo dado.
-
-        Columns: open_time, open, high, low, close, volume,
-                 close_time, quote_volume, num_trades
-        """
-        key = (symbol.upper(), interval)
-        buf = self._realtime_buffers.get(key)
-
-        if not buf:
-            logger.debug("Sin datos en buffer para %s %s", symbol, interval)
-            return pd.DataFrame(
-                columns=[
-                    "open_time", "open", "high", "low", "close",
-                    "volume", "close_time", "quote_volume", "num_trades",
-                ]
-            )
-
-        # Build DataFrame on the fly
-        df = pd.DataFrame(list(buf))
-        return self.cleaner.clean_data(df)
-
-    # ══════════════════════════════════════════════════════════════════
-    #  Datos históricos
-    # ══════════════════════════════════════════════════════════════════
+            await asyncio.sleep(self._alt_data_interval)
 
     async def get_historical_data(
         self,
@@ -711,155 +602,154 @@ class BinanceDataHandler:
         interval: str = "1h",
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        limit_per_request: int = 200,
     ) -> pd.DataFrame:
         """
-        Descarga datos históricos de Binance Futures.
-
-        Args:
-            symbol:     Par de trading (e.g. "BTCUSDT").
-            interval:   Intervalo de velas ("1m", "5m", "1h", "4h", "1d").
-            start_date: Fecha de inicio como string UTC ("1 Jan 2023")
-                        o None para descargar los últimos 3 años.
-            end_date:   Fecha de fin (None = ahora).
-
-        Returns:
-            DataFrame limpio con columnas OHLCV + timestamps.
+        Descarga klines históricas via REST paginado desde Bitget v2.
+        PAGINACIÓN móvil y resiliencia ante rate limits.
         """
-        if self._client is None:
-            self._client = await AsyncClient.create(
-                api_key=self.api_key,
-                api_secret=self.api_secret,
-            )
+        if self._session is None:
+            self._session = aiohttp.ClientSession()
 
-        if start_date is None:
-            start_dt = datetime.now(timezone.utc) - timedelta(days=3 * 365)
-            start_date = start_dt.strftime("%d %b %Y")
+        sym = self._resolve_symbol(symbol)
+        granularity = _TF_MAP.get(interval, "1H")
 
-        bi_interval = _INTERVAL_MAP.get(interval, interval)
+        end_ts = int(datetime.now(timezone.utc).timestamp() * 1000)
+        if start_date:
+            try:
+                dt = pd.to_datetime(start_date, utc=True)
+                start_ts = int(dt.timestamp() * 1000)
+            except Exception:
+                start_ts = end_ts - (365 * 24 * 60 * 60 * 1000)
+        else:
+            start_ts = end_ts - (365 * 24 * 60 * 60 * 1000)
 
-        logger.info(
-            "Descargando históricos %s %s desde %s...",
-            symbol,
-            interval,
-            start_date,
-        )
+        current_end_ts = end_ts
+        url = f"{BITGET_REST_BASE}/api/v2/mix/market/history-candles"
+        
+        all_klines = []
+        logger.info("Descargando históricos %s %s...", sym, interval)
 
-        raw_klines = await self._client.get_historical_klines(  # type: ignore
-            symbol=symbol,
-            interval=bi_interval,
-            start_str=start_date,
-            end_str=end_date,
-            klines_type=HistoricalKlinesType.FUTURES,
-        )
+        while current_end_ts > start_ts:
+            params = {
+                "symbol": sym,
+                "granularity": granularity,
+                "productType": self.product_type,
+                "limit": str(limit_per_request),
+                "startTime": str(start_ts),
+                "endTime": str(current_end_ts)
+            }
+            try:
+                async with self._session.get(url, params=params) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if data.get("code") == "00000" and data.get("data"):
+                            page_klines = data["data"]
+                            if not page_klines:
+                                break
+                            all_klines.extend(page_klines)
+                            # Descendente: page_klines[-1] es el más viejo recibido
+                            earliest_ts = int(page_klines[-1][0])
+                            next_end = earliest_ts - 1
+                            if next_end >= current_end_ts:
+                                # Previene loop infinito
+                                break
+                            current_end_ts = next_end
+                        else:
+                            break
+                    elif resp.status == 429:
+                        await asyncio.sleep(2.0)
+                        continue
+                    else:
+                        break
+            except Exception as e:
+                logger.error("Error fetching historical history: %s", e)
+                break
+                
+            await asyncio.sleep(0.1)
 
-        if not raw_klines:
-            logger.warning("Sin datos históricos para %s %s", symbol, interval)
+        if not all_klines:
             return pd.DataFrame()
 
-        # Cada kline cruda es una lista de 12 elementos:
-        # [open_time, open, high, low, close, volume, close_time,
-        #  quote_volume, num_trades, taker_buy_base, taker_buy_quote, ignore]
-        df = pd.DataFrame(
-            raw_klines,
-            columns=[
-                "open_time", "open", "high", "low", "close", "volume",
-                "close_time", "quote_volume", "num_trades",
-                "taker_buy_base", "taker_buy_quote", "ignore",
-            ],
-        )
+        # Invertir para ascendente
+        all_klines = list(reversed(all_klines))
 
-        # Convertir timestamps (ms → datetime)
-        df["open_time"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
-        df["close_time"] = pd.to_datetime(df["close_time"], unit="ms", utc=True)
+        df_data = []
+        for k in all_klines:
+            d = self.cleaner.clean_kline_row(k)
+            d.pop("ts_ms", None)
+            df_data.append(d)
 
-        # Convertir OHLCV a float
-        for col in ("open", "high", "low", "close", "volume", "quote_volume"):
-            df[col] = df[col].astype(float)
-        df["num_trades"] = df["num_trades"].astype(int)
-
-        # Descartar columnas innecesarias
-        df = df.drop(columns=["taker_buy_base", "taker_buy_quote", "ignore"])
-
-        # Limpiar
+        df = pd.DataFrame(df_data)
         df = self.cleaner.clean_data(df)
-
-        # Persistir
-        saved = self.store.save_klines(symbol, interval, df)
+        
+        saved = self.store.save_klines(sym, interval, df)
         logger.info(
-            "Descargados %d klines (%d nuevos guardados) [%s %s]",
+            "Descargados %d klines (%d guardados) [%s %s]",
             len(df),
             saved,
-            symbol,
+            sym,
             interval,
         )
-
         return df
 
-    # ══════════════════════════════════════════════════════════════════
-    #  Limpieza (delegado público)
-    # ══════════════════════════════════════════════════════════════════
-
-    def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Limpieza completa del DataFrame.
-
-        - Elimina NaN en OHLCV
-        - Convierte a tipos numéricos
-        - Detecta outliers por z-score
-        - Valida coherencia (high >= low)
-        - Ordena por open_time
-        """
-        return self.cleaner.clean_data(df)
-
-    # ══════════════════════════════════════════════════════════════════
-    #  Consultas locales (SQLite)
-    # ══════════════════════════════════════════════════════════════════
-
-    def get_dataframe(
+    def get_realtime_klines(
         self,
         symbol: str = "BTCUSDT",
-        interval: str = "1h",
-        start: Optional[datetime] = None,
-        end: Optional[datetime] = None,
+        interval: str = "1m",
+        exclude_open_candle: bool = True,
     ) -> pd.DataFrame:
         """
-        Carga datos desde SQLite, limpia y retorna.
-        Si hay un buffer en tiempo real, lo concatena al final.
+        Retorna DataFrame OHLCV del buffer en memoria.
+        
+        PARÁMETRO CRÍTICO exclude_open_candle=True (default):
+        Si True → retorna df.iloc[:-1] (excluye la última vela, que
+        puede estar abierta y tiene close provisional).
+        
+        Documentar explícitamente: llamar con exclude_open_candle=False
+        solo si se necesita el precio actual del tick (para dashboard
+        de monitoreo), NUNCA para cálculo de señales o indicadores.
         """
-        df_stored = self.store.load_klines(symbol, interval, start, end)
-
-        # Append real-time buffer desde memoria cruda (lista)
-        key = (symbol, interval)
+        sym = self._resolve_symbol(symbol)
+        key = (sym, interval)
         buf = self._realtime_buffers.get(key)
-        if buf:
-            buf_df = pd.DataFrame(list(buf))
-            df_stored = pd.concat([df_stored, buf_df], ignore_index=True)
-            df_stored = df_stored.drop_duplicates(subset=["open_time"], keep="last")
 
-        if df_stored.empty:
-            return df_stored
+        if not buf:
+            return pd.DataFrame(
+                columns=[
+                    "open_time", "open", "high", "low", "close",
+                    "volume", "close_time", "quote_volume", "num_trades",
+                ]
+            )
 
-        return self.cleaner.clean_data(df_stored)
+        df = pd.DataFrame(list(buf))
+        
+        if "ts_ms" in df.columns:
+            df = df.drop(columns=["ts_ms"])
+            
+        df = self.cleaner.clean_data(df)
+        
+        if exclude_open_candle and not df.empty and len(df) > 1:
+            df = df.iloc[:-1]
+            
+        return df
 
-    # ══════════════════════════════════════════════════════════════════
-    #  Suscripciones
-    # ══════════════════════════════════════════════════════════════════
+    def get_alternative_data(self, symbol: str) -> Dict[str, Any]:
+        """Retorna funding rate e imbalance actuales."""
+        sym = self._resolve_symbol(symbol)
+        return {
+            "orderbook": self._orderbook_data.get(sym, {}),
+            "funding_rate": self._funding_rates.get(sym, 0.0)
+        }
 
     def subscribe(self, callback: Callable) -> None:
-        """
-        Registra un callback que se invoca con cada vela cerrada.
-        Firma: callback(symbol: str, interval: str, kline: dict)
-        """
-        self._subscribers.append(callback)
-        logger.debug("Suscriptor registrado. Total: %d", len(self._subscribers))
+        """Sistema de suscripción para velas cerradas."""
+        if callback not in self._subscribers:
+            self._subscribers.append(callback)
 
     def unsubscribe(self, callback: Callable) -> None:
-        """Elimina un callback previamente registrado."""
-        self._subscribers.remove(callback)
-
-    # ══════════════════════════════════════════════════════════════════
-    #  Helpers
-    # ══════════════════════════════════════════════════════════════════
+        if callback in self._subscribers:
+            self._subscribers.remove(callback)
 
     @property
     def is_running(self) -> bool:
@@ -867,19 +757,44 @@ class BinanceDataHandler:
 
     @property
     def active_streams(self) -> int:
-        return len([t for t in self._ws_tasks if not t.done()])
+        return len(self._ws_tasks)
 
     def buffer_sizes(self) -> Dict[str, int]:
-        """Retorna el tamaño de cada buffer en memoria."""
-        return {
-            f"{sym}_{itv}": len(df)
-            for (sym, itv), df in self._realtime_buffers.items()
-        }
+        return {f"{k[0]}_{k[1]}": len(v) for k, v in self._realtime_buffers.items()}
 
     def __repr__(self) -> str:
-        status = "RUNNING" if self._running else "STOPPED"
         return (
-            f"<BinanceDataHandler status={status} "
-            f"symbols={self.symbols} timeframes={list(self.timeframes)} "
-            f"streams={self.active_streams}>"
+            f"<BitgetDataHandler(demo={self.demo_mode}, "
+            f"product={self.product_type}, active_streams={self.active_streams})>"
         )
+
+# ──────────────────────────────────────────────────────────────────────
+#  DataHandlerFactory
+# ──────────────────────────────────────────────────────────────────────
+
+def create_data_handler(
+    venue: str = "bitget",
+    **kwargs
+) -> BitgetDataHandler:
+    """
+    Factory para crear el handler de datos correcto según venue.
+    
+    Por ahora solo soporta Bitget. Estructura preparada para
+    añadir ForexDataHandler (OANDA) en fase futura sin romper
+    nada en pipeline.py.
+    
+    Args:
+        venue: "bitget" (único soportado actualmente)
+        **kwargs: parámetros para BitgetDataHandler
+    
+    Returns:
+        Handler configurado para el venue solicitado
+    
+    Raises:
+        ValueError: si venue no está soportado
+    """
+    if venue == "bitget":
+        return BitgetDataHandler(**kwargs)
+    raise ValueError(
+        f"Venue '{venue}' no soportado. Venues disponibles: ['bitget']"
+    )

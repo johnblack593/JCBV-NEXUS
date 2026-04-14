@@ -59,6 +59,22 @@ TELEGRAM_DEV_CHAT_ID: str = os.getenv("TELEGRAM_DEV_CHAT_ID", "")
 
 
 # ──────────────────────────────────────────────
+#  Exchange & Broker Credentials
+# ──────────────────────────────────────────────
+
+# Bitget (venue primario de datos y ejecución crypto)
+BITGET_API_KEY: str = os.getenv("BITGET_API_KEY", "")
+BITGET_API_SECRET: str = os.getenv("BITGET_API_SECRET", "")
+BITGET_API_PASSPHRASE: str = os.getenv("BITGET_API_PASSPHRASE", "")
+BITGET_DEMO_MODE: bool = os.getenv("BITGET_DEMO_MODE", "true").lower() == "true"
+
+# IQ Option (venue de ejecución para CFDs y binarias)
+IQOPTION_EMAIL: str = os.getenv("IQOPTION_EMAIL", "")
+IQOPTION_PASSWORD: str = os.getenv("IQOPTION_PASSWORD", "")
+
+
+
+# ──────────────────────────────────────────────
 #  Parámetros de Trading
 # ──────────────────────────────────────────────
 
@@ -134,6 +150,28 @@ class BacktestConfig:
 
 
 # ──────────────────────────────────────────────
+#  Parámetros de Venue Config
+# ──────────────────────────────────────────────
+
+@dataclass
+class VenueConfig:
+    """
+    Configuración de venues de trading.
+    
+    Bitget: fuente de datos primaria + ejecución crypto futures
+    IQ Option: ejecución secundaria para CFDs y binarias
+    
+    IMPORTANTE: Los datos de mercado siempre vienen de Bitget o de
+    fuentes de mercado abierto. IQ Option se usa SOLO para ejecución,
+    nunca como fuente de datos históricos.
+    """
+    primary_data_venue: str = "bitget"
+    crypto_execution_venue: str = "bitget"
+    cfd_execution_venue: str = "iqoption"
+    demo_mode: bool = True  # Sobreescrito por BITGET_DEMO_MODE del .env
+
+
+# ──────────────────────────────────────────────
 #  Instancias por defecto
 # ──────────────────────────────────────────────
 
@@ -142,3 +180,4 @@ risk_config     = RiskConfig()
 ml_config       = MLConfig()
 sentiment_config = SentimentConfig()
 backtest_config  = BacktestConfig()
+venue_config     = VenueConfig(demo_mode=BITGET_DEMO_MODE)
