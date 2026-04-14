@@ -1,1 +1,30 @@
+# ── Exchange & Networking ────────────────────────────────────────────
 ccxt>=4.3.0
+aiohttp>=3.9.0
+
+# ── Data & Signals ───────────────────────────────────────────────────
+pandas>=2.1.0
+numpy>=1.26.0
+ta>=0.11.0
+
+# ── Machine Learning (opcional — fallback si no está disponible) ─────
+# Si no vas a usar ML, puedes comentar estas líneas.
+# El sistema tiene fallback automático si no están instaladas.
+scikit-learn>=1.4.0
+
+# ── Infrastructure ───────────────────────────────────────────────────
+redis>=5.0.0
+python-dotenv>=1.0.0
+prometheus-client>=0.20.0
+
+# ── Telegram Alerts ─────────────────────────────────────────────────
+python-telegram-bot>=21.0.0
+
+# ── Visualization (reporte semanal con chart de equity) ──────────────
+# Solo necesario si quieres el chart PNG en el reporte de Telegram.
+# El sistema funciona sin esto — solo omite el gráfico.
+matplotlib>=3.8.0
+
+# ── QuestDB (Data Lake) ──────────────────────────────────────────────
+# Cliente ILP para escritura rápida de series de tiempo.
+questdb>=1.1.0
