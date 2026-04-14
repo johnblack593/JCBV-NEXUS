@@ -383,6 +383,9 @@ class NexusAlphaOscillatorCalculator:
         self.bb_period = bb_period
         self.bb_dev = bb_dev
         self.rsi_period = rsi_period
+        # ADVERTENCIA: Este calculador es stateful (no thread-safe).
+        # El pipeline debe instanciar un TechnicalSignalEngine por símbolo,
+        # nunca compartir una instancia entre múltiples símbolos concurrentes.
         self._cooldown_remaining = 0  # Barras de silencio post-señal
         self._last_signal_dir = None  # Última dirección emitida
 
@@ -451,10 +454,10 @@ class NexusAlphaOscillatorCalculator:
         else:
             logger.debug("BULL_LAYER: PA Miss (0.00)")
 
-        if vol_ratio >= 1.0:
+        if vol_ratio >= 1.5:  # 1.5x: confirma interés real, no solo volumen promedio
             bull_score += 0.15
             bull_details.append(f"V({vol_ratio:.1f}x)")
-            logger.debug(f"BULL_LAYER: Volume >= 1.0 Hit (+0.15) - Ratio: {vol_ratio:.1f}x")
+            logger.debug(f"BULL_LAYER: Volume >= 1.5 Hit (+0.15) - Ratio: {vol_ratio:.1f}x")
         else:
             logger.debug(f"BULL_LAYER: Volume Miss (0.00) - Ratio: {vol_ratio:.1f}x")
 
@@ -491,10 +494,10 @@ class NexusAlphaOscillatorCalculator:
         else:
             logger.debug("BEAR_LAYER: PA Miss (0.00)")
 
-        if vol_ratio >= 1.0:
+        if vol_ratio >= 1.5:  # 1.5x: confirma interés real, no solo volumen promedio
             bear_score += 0.15
             bear_details.append(f"V({vol_ratio:.1f}x)")
-            logger.debug(f"BEAR_LAYER: Volume >= 1.0 Hit (+0.15) - Ratio: {vol_ratio:.1f}x")
+            logger.debug(f"BEAR_LAYER: Volume >= 1.5 Hit (+0.15) - Ratio: {vol_ratio:.1f}x")
         else:
             logger.debug(f"BEAR_LAYER: Volume Miss (0.00) - Ratio: {vol_ratio:.1f}x")
 
@@ -798,6 +801,16 @@ class TechnicalSignalEngine:
 
     def get_dashboard(self, df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         """Retorna el estado individual de cada indicador sin generar señal."""
+        if self.mode == "binary":
+            alpha_result = self.alpha.evaluate(df)
+            return {
+                "NexusAlpha": {
+                    "direction": alpha_result.direction.name,
+                    "value": alpha_result.value,
+                    "detail": alpha_result.detail,
+                }
+            }
+
         results = {
             "RSI": self.rsi.evaluate(df),
             "MACD": self.macd.evaluate(df),
@@ -1012,14 +1025,21 @@ class TechnicalSignalEngine:
                 sig = tf_signals[tf]
                 if sig["signal"] in ("BUY", "SELL"):
                     # Verificar alineación con el sesgo macro
-                    aligned = (
-                        (sig["signal"] == "BUY" and macro_bias == "BULLISH")
-                        or (sig["signal"] == "SELL" and macro_bias == "BEARISH")
-                    )
+                    # NEUTRAL macro_bias no bloquea: permite señal con confianza reducida
+                    if macro_bias == "NEUTRAL":
+                        aligned = sig["signal"] in ("BUY", "SELL")
+                        neutral_penalty = 0.85  # reducción de confianza por incertidumbre macro
+                    else:
+                        aligned = (
+                            (sig["signal"] == "BUY" and macro_bias == "BULLISH")
+                            or (sig["signal"] == "SELL" and macro_bias == "BEARISH")
+                        )
+                        neutral_penalty = 1.0
+
                     if aligned:
                         final_signal = sig["signal"]
                         # Boost de confianza por alineación fractal
-                        final_confidence = min(sig["confidence"] * 1.15, 0.95)
+                        final_confidence = min(sig["confidence"] * 1.15 * neutral_penalty, 0.95)
                         final_reason = (
                             f"Fractal {tf}: {sig['signal']} alineado con sesgo macro {macro_bias}"
                         )
