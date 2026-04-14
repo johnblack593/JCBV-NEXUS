@@ -261,12 +261,16 @@ class EMACrossCalculator:
         """Detecta Golden Cross (BUY) o Death Cross (SELL)."""
         ema_fast, ema_slow = self.calculate(df)
 
-        if len(ema_fast) < 2 or np.isnan(ema_fast.iloc[-1]) or np.isnan(ema_slow.iloc[-1]):
+        if (
+            len(ema_fast) < 2
+            or np.isnan(ema_fast.iloc[-1]) or np.isnan(ema_fast.iloc[-2])
+            or np.isnan(ema_slow.iloc[-1]) or np.isnan(ema_slow.iloc[-2])
+        ):
             return IndicatorResult(
                 name="EMA_Cross",
                 direction=SignalDirection.NEUTRAL,
                 value=0.0,
-                detail=f"EMA{self.fast_period}/{self.slow_period} sin datos suficientes (requiere {self.slow_period} periodos)",
+                detail=f"EMA{self.fast_period}/{self.slow_period} sin datos suficientes (requiere {self.slow_period} periodos, recibidos {len(df)})",
             )
 
         curr_fast = ema_fast.iloc[-1]
@@ -387,7 +391,8 @@ class NexusAlphaOscillatorCalculator:
         # El pipeline debe instanciar un TechnicalSignalEngine por símbolo,
         # nunca compartir una instancia entre múltiples símbolos concurrentes.
         self._cooldown_remaining = 0  # Barras de silencio post-señal
-        self._last_signal_dir = None  # Última dirección emitida
+        # _last_signal_dir: reservado para anti-flip futuro (no activo)
+        # Estado activo: solo _cooldown_remaining
 
     def evaluate(self, df: pd.DataFrame) -> IndicatorResult:
         if len(df) < self.bb_period + 5:
@@ -397,9 +402,6 @@ class NexusAlphaOscillatorCalculator:
             self._cooldown_remaining -= 1
             return IndicatorResult("NexusAlpha", SignalDirection.NEUTRAL, 0.0,
                                    f"Cooldown ({self._cooldown_remaining})")
-
-        from ta.volatility import BollingerBands
-        from ta.momentum import RSIIndicator
 
         close = df["close"]
         bb = BollingerBands(close=close, window=self.bb_period, window_dev=self.bb_dev)
@@ -671,9 +673,13 @@ class TechnicalSignalEngine:
                 new_rsi = int(alpha_rsi) if alpha_rsi is not None else self.alpha.rsi_period
                 new_bbp = int(alpha_bb_p) if alpha_bb_p is not None else self.alpha.bb_period
                 new_bbd = float(alpha_bb_d) if alpha_bb_d is not None else self.alpha.bb_dev
+                
+                # Preserve cooldown state across hot-reload (AI Mode safety)
+                _saved_cooldown = getattr(self.alpha, '_cooldown_remaining', 0)
                 self.alpha = NexusAlphaOscillatorCalculator(
                     bb_period=new_bbp, bb_dev=new_bbd, rsi_period=new_rsi
                 )
+                self.alpha._cooldown_remaining = _saved_cooldown
                 changed.append(f"Alpha(RSI={new_rsi},BB={new_bbp}/{new_bbd})")
 
         # Min consensus (spot mode)
