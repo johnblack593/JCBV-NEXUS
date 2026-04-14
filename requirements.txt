@@ -1,16 +1,14 @@
 # ═══════════════════════════════════════════════════════════════════
-# NEXUS v5.0 (beta) — Dependencias de Producción Unificadas
+# NEXUS v5.0 — Dependencias de Producción Unificadas
 # Python 3.11+ requerido
 # ═══════════════════════════════════════════════════════════════════
 # Instalación:
 #   pip install -r requirements.txt
 #
-# Este archivo es la fuente única de verdad para dependencias.
-# nexus/requirements.txt es un alias — apunta a este.
-#
 # Venues: IQ Option (primario) + Bitget/Binance (ccxt)
 # LLM: Groq + Gemini via aiohttp REST directo (sin SDK wrappers)
-# ML: scikit-learn ensemble CPU-only (TensorFlow eliminado en v5.0)
+# ML: scikit-learn ensemble CPU-only
+# Dashboard: FastAPI + Uvicorn + JWT + multipart
 # ═══════════════════════════════════════════════════════════════════
 
 # ── IQ Option API (fork JCBV modernizado) ────────────────────────
@@ -22,9 +20,11 @@ aiohttp>=3.9.5
 aiohttp-retry>=2.8.3
 websockets>=14.1
 
-# ── Dashboard ─────────────────────────────────────────────────────
+# ── Dashboard OCP ─────────────────────────────────────────────────
 fastapi>=0.111.0
 uvicorn>=0.30.0
+PyJWT>=2.8.0
+python-multipart>=0.0.9
 
 # ── Data & Análisis Cuantitativo ──────────────────────────────────
 pandas>=2.2.3
@@ -42,6 +42,7 @@ google-generativeai>=0.7.0
 # ── Persistencia & Estado ─────────────────────────────────────────
 redis>=5.2.0
 questdb>=1.1.0
+asyncpg>=0.29.0
 sqlalchemy>=2.0.0
 
 # ── Observabilidad ────────────────────────────────────────────────
