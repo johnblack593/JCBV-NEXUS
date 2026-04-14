@@ -12,6 +12,10 @@ ta>=0.11.0
 # El sistema tiene fallback automático si no están instaladas.
 scikit-learn>=1.4.0
 
+# ── LLM Providers ────────────────────────────────────────────────────
+groq>=0.9.0
+google-generativeai>=0.7.0
+
 # ── Infrastructure ───────────────────────────────────────────────────
 redis>=5.0.0
 python-dotenv>=1.0.0
