@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-NEXUS v4.0 — Institutional Entry Point
+NEXUS v5.0 — Punto de Entrada Principal
 ========================================
-THE definitive entrypoint for NEXUS v4.0.
+Punto de entrada definitivo para NEXUS v5.0.
 
-Pre-flight checks:
-    1. Load .env
-    2. Verify Redis connectivity
-    3. Verify QuestDB connectivity
-    4. Verify Telegram token loaded
-    5. Initialize NexusPipeline (5-layer)
-    6. Run with graceful shutdown
+Verificaciones pre-vuelo:
+    1. Cargar .env
+    2. Verificar conectividad Redis
+    3. Verificar conectividad QuestDB
+    4. Verificar token Telegram cargado
+    5. Inicializar NexusPipeline (5 capas)
+    6. Ejecutar con apagado elegante
 
-Usage:
+Uso:
     python main.py
 
-Environment:
+Variables de entorno:
     EXECUTION_VENUE=IQ_OPTION | BINANCE  (default: IQ_OPTION)
     REDIS_HOST, REDIS_PORT               (default: localhost:6379)
     QUESTDB_PG_HOST, QUESTDB_PG_PORT     (default: localhost:8812)
@@ -102,7 +102,7 @@ def preflight_checks() -> bool:
     venue = os.getenv("EXECUTION_VENUE", "IQ_OPTION").upper()
 
     logger.info("=" * 60)
-    logger.info("  NEXUS v4.0 — Pre-Flight Health Checks")
+    logger.info("  NEXUS v5.0 — Verificaciones Pre-Vuelo")
     logger.info("=" * 60)
     logger.info(f"  Venue: {venue}")
     logger.info("")
@@ -125,7 +125,7 @@ def preflight_checks() -> bool:
             f"  ⚠️  Redis         → OFFLINE ({redis_host}:{redis_port}): {exc}"
         )
         logger.warning(
-            "     Pipeline will run without shared state (local fallback)."
+            "     El pipeline correrá sin estado compartido (fallback local)."
         )
         passed += 1  # Non-fatal: pipeline degrades gracefully
 
@@ -143,7 +143,7 @@ def preflight_checks() -> bool:
             f"  ⚠️  QuestDB       → OFFLINE ({qdb_host}:{qdb_port})"
         )
         logger.warning(
-            "     Trade persistence will be disabled."
+            "     La persistencia de operaciones estará deshabilitada."
         )
         passed += 1  # Non-fatal
 
@@ -158,12 +158,12 @@ def preflight_checks() -> bool:
     else:
         logger.warning("  ⚠️  Telegram       → NOT CONFIGURED")
         logger.warning(
-            "     Set TELEGRAM_BOT_TOKEN & TELEGRAM_CHAT_ID in .env"
+            "     Configura TELEGRAM_BOT_TOKEN & TELEGRAM_CHAT_ID en .env"
         )
         passed += 1  # Non-fatal
 
     logger.info("")
-    logger.info(f"  Result: {passed}/{total} checks passed")
+    logger.info(f"  Resultado: {passed}/{total} verificaciones completadas")
     logger.info("=" * 60)
 
     return True  # All checks are non-fatal — pipeline degrades gracefully
@@ -184,7 +184,7 @@ async def run() -> None:
     shutdown_event = asyncio.Event()
 
     def _signal_handler() -> None:
-        logger.info("🛑 Shutdown signal received.")
+        logger.info("🛑 Señal de apagado recibida.")
         shutdown_event.set()
 
     loop = asyncio.get_running_loop()
@@ -198,11 +198,21 @@ async def run() -> None:
     try:
         await pipeline.initialize()
     except Exception as exc:
-        logger.critical(f"💀 Pipeline initialization failed: {exc}", exc_info=True)
-        TelegramReporter.get_instance().fire_system_error(
-            f"FATAL: init failed: {exc}", module="main.py"
+        logger.critical(
+            "💀 Falló la inicialización del pipeline: %s", exc, exc_info=True
         )
-        await asyncio.sleep(2)  # Grace for Telegram dispatch
+        # Intenta enviar alerta Telegram solo si el reporter ya fue inicializado.
+        # Si no, el error se habrá registrado en el log de archivo.
+        try:
+            reporter = TelegramReporter.get_instance()
+            reporter.fire_system_error(
+                f"🚨 NEXUS v5.0 — Error fatal en arranque:\n{exc}", module="main.py"
+            )
+            await asyncio.sleep(2)
+        except Exception as tg_exc:
+            logger.warning(
+                "No se pudo enviar alerta Telegram en el arranque: %s", tg_exc
+            )
         return
 
     # ── Launch OCP Dashboard (FastAPI on port 8000) ───────────────
@@ -219,7 +229,7 @@ async def run() -> None:
     logger.info(f"🎛️ OCP Dashboard LIVE on http://0.0.0.0:{dashboard_port}")
 
     # ── Run Pipeline ──────────────────────────────────────────────
-    logger.info("🚀 NEXUS v4.0 — Pipeline LIVE")
+    logger.info("🚀 NEXUS v5.0 — Pipeline ACTIVO")
 
     # Run pipeline and shutdown_event concurrently
     pipeline_task = asyncio.create_task(pipeline.run())
@@ -240,15 +250,15 @@ async def run() -> None:
             pass
 
     # ── Graceful Shutdown ─────────────────────────────────────────
-    logger.info("🛑 Initiating graceful shutdown...")
+    logger.info("🛑 Iniciando apagado controlado...")
     try:
         await asyncio.wait_for(pipeline.shutdown(), timeout=15)
     except asyncio.TimeoutError:
-        logger.warning("Shutdown timed out after 15s. Forcing exit.")
+        logger.warning("Apagado superó 15s de espera. Forzando salida.")
     except Exception as exc:
-        logger.error(f"Shutdown error: {exc}")
+        logger.error(f"Error en apagado: {exc}")
 
-    logger.info("🏁 NEXUS v4.0 — Session ended cleanly.")
+    logger.info("🏁 NEXUS v5.0 — Sesión finalizada correctamente.")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -267,11 +277,11 @@ def main() -> None:
     print("  ██║╚██╗██║██╔══╝   ██╔██╗ ██║   ██║╚════██║")
     print("  ██║ ╚████║███████╗██╔╝ ██╗╚██████╔╝███████║")
     print("  ╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝")
-    print("  v4.0 Institutional Grade — HFT Pipeline")
+    print("  v5.0 Grado Institucional — Pipeline HFT")
     print("=" * 60 + "\n")
 
     import argparse
-    parser = argparse.ArgumentParser(description="NEXUS v4.0 Omni-Channel Commander")
+    parser = argparse.ArgumentParser(description="NEXUS v5.0 Comandante Omni-Canal")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Command: run
@@ -294,9 +304,9 @@ def main() -> None:
         try:
             asyncio.run(run())
         except KeyboardInterrupt:
-            print("\n🛑 NEXUS terminated by user (Ctrl+C).")
+            print("\n🛑 NEXUS detenido por el usuario (Ctrl+C).")
         except Exception as exc:
-            print(f"\n💀 FATAL: {exc}")
+            print(f"\n💀 ERROR FATAL: {exc}")
             sys.exit(1)
             
     elif args.command == "test":
