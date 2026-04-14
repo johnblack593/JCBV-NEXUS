@@ -73,6 +73,80 @@ class PositionManager:
             f"TP={position.take_profit:.4f}"
         )
 
+    async def sync_open_positions(self) -> int:
+        """
+        Reads open positions from Bitget and registers any untracked ones.
+        Called once during pipeline initialization, after connect().
+
+        Returns number of positions synced.
+        """
+        synced = 0
+        try:
+            exchange = self._engine._exchange_futures or self._engine._exchange_spot
+            if not exchange:
+                return 0
+
+            raw_positions = await exchange.fetch_positions()
+
+            for raw in raw_positions:
+                # Only process positions with non-zero size
+                contracts = float(raw.get("contracts", 0) or 0)
+                if contracts <= 0:
+                    continue
+
+                asset     = raw.get("symbol", "")
+                side      = raw.get("side", "").lower()    # "long" | "short"
+                direction = "buy" if side == "long" else "sell"
+                entry_px  = float(raw.get("entryPrice",  0) or 0)
+                notional  = float(raw.get("notional",    0) or 0)
+                liq_price = float(raw.get("liquidationPrice", 0) or 0)
+
+                if asset in self._positions:
+                    continue  # Already tracked — skip
+
+                # Reconstruct OpenPosition from exchange data.
+                # ATR is unknown at restart — use 0.5% of entry as fallback.
+                atr_fallback = entry_px * 0.005
+
+                # SL: use liquidation price as floor if available.
+                # TP: unknown — set to entry + 3x fallback ATR.
+                stop_loss   = liq_price if liq_price > 0 else (
+                    entry_px - 2 * atr_fallback if direction == "buy"
+                    else entry_px + 2 * atr_fallback
+                )
+                take_profit = (
+                    entry_px + 3 * atr_fallback if direction == "buy"
+                    else entry_px - 3 * atr_fallback
+                )
+
+                pos = OpenPosition(
+                    asset=asset,
+                    direction=direction,
+                    entry_price=entry_px,
+                    original_size=contracts,
+                    remaining_size=contracts,
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
+                    atr_at_entry=atr_fallback,
+                )
+                pos.peak_price = entry_px
+
+                async with self._lock:
+                    self._positions[asset] = pos
+                synced += 1
+                logger.warning(
+                    f"🔄 POSITION SYNCED (restart recovery) — {asset} | "
+                    f"{direction.upper()} | entry={entry_px:.4f} | "
+                    f"contracts={contracts} | ATR=fallback({atr_fallback:.4f})"
+                )
+
+        except Exception as exc:
+            logger.error(f"sync_open_positions failed: {exc}", exc_info=True)
+
+        if synced > 0:
+            logger.info(f"🔄 Synced {synced} open position(s) from exchange.")
+        return synced
+
     async def start(self) -> None:
         """Starts the background management loop."""
         self._running = True
@@ -202,6 +276,24 @@ class PositionManager:
             return new_sl > pos.stop_loss
         return new_sl < pos.stop_loss
 
+    def _is_above_minimum_size(
+        self, size: float, price: float
+    ) -> bool:
+        """
+        Returns True if the order notional value (size * price)
+        exceeds BITGET_MIN_ORDER_USDT.
+        Prevents silent rejection of sub-minimum partial closes.
+        """
+        min_usdt = float(os.getenv("BITGET_MIN_ORDER_USDT", "5.0"))
+        notional = size * price
+        if notional < min_usdt:
+            logger.warning(
+                f"Order size guard: notional=${notional:.4f} < "
+                f"min=${min_usdt:.2f}. Skipping partial close."
+            )
+            return False
+        return True
+
     async def _partial_close(
         self, asset: str, pos: OpenPosition, size: float, tier: int
     ) -> None:
@@ -214,9 +306,18 @@ class PositionManager:
             if not exchange:
                 return
 
+            # Stream F: Minimum order size guard
+            current_price = await self._get_current_price(asset)
+            if not self._is_above_minimum_size(size, current_price):
+                # Mark tier as complete anyway to avoid infinite retry
+                if tier == 1:
+                    pos.partial_tier_1 = True
+                elif tier == 2:
+                    pos.partial_tier_2 = True
+                return
+
             close_side = "sell" if pos.direction == "buy" else "buy"
-            order = await asyncio.to_thread(
-                exchange.create_order,
+            order = await exchange.create_order(
                 symbol=asset,
                 type="market",
                 side=close_side,
@@ -252,20 +353,15 @@ class PositionManager:
                 return
 
             try:
-                open_orders = await asyncio.to_thread(
-                    exchange.fetch_open_orders, asset
-                )
+                open_orders = await exchange.fetch_open_orders(asset)
                 for order in open_orders:
                     if order.get("type") in ("stop_market", "stop"):
-                        await asyncio.to_thread(
-                            exchange.cancel_order, order["id"], asset
-                        )
+                        await exchange.cancel_order(order["id"], asset)
             except Exception as cancel_exc:
                 logger.warning(f"Could not cancel existing SL for {asset}: {cancel_exc}")
 
             close_side = "sell" if pos.direction == "buy" else "buy"
-            await asyncio.to_thread(
-                exchange.create_order,
+            await exchange.create_order(
                 symbol=asset,
                 type="stop_market",
                 side=close_side,
