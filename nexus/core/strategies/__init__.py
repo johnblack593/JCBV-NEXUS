@@ -2,8 +2,10 @@
 # BaseStrategy + Venue-specific implementations
 from .base import BaseStrategy
 from .binary_ml_exotic import BinaryMLExoticStrategy
+from .bitget_trend_scalper import BitgetTrendScalperStrategy
 
 __all__ = [
     "BaseStrategy",
     "BinaryMLExoticStrategy",
+    "BitgetTrendScalperStrategy",
 ]
