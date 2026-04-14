@@ -48,6 +48,7 @@ from .macro.macro_agent import MacroAgent, MacroRegime
 from .data_lake.questdb_client import QuestDBClient
 from .signal_engine import TechnicalSignalEngine
 from .risk_manager import QuantRiskManager
+from .position_manager import PositionManager, OpenPosition
 from .observability import NexusMetrics
 from .strategies.base import BaseStrategy
 from .strategies.binary_ml_exotic import BinaryMLExoticStrategy
@@ -127,6 +128,7 @@ class NexusPipeline:
         self.risk_manager: Optional[QuantRiskManager] = None
         self.opportunity_agent: Optional[OpportunityAgent] = None
         self.execution_engine: Optional[AbstractExecutionEngine] = None
+        self._position_manager: Optional[PositionManager] = None
         self.metrics: Optional[NexusMetrics] = None
 
         # Session tracking
@@ -187,7 +189,6 @@ class NexusPipeline:
             self.risk_manager.update_portfolio(balance, [])
             logger.info(f"💰 Balance inicial: ${balance:.2f}")
 
-            # ── Layer 5b: Opportunity Agent (asset selection background loop) ─
             self.opportunity_agent = OpportunityAgent(
                 execution_engine=self.execution_engine,
                 redis_client=self.redis_client,
@@ -196,6 +197,9 @@ class NexusPipeline:
             )
             await self.opportunity_agent.start()
             logger.info("🔎 OpportunityAgent started (5 min interval)")
+            
+            if self.venue == "BITGET":
+                self._position_manager = PositionManager(self.execution_engine)
         else:
             logger.warning("⚠️ Execution engine no conectado. Pipeline en modo dry-run.")
 
@@ -232,6 +236,15 @@ class NexusPipeline:
         """
         self._running = True
         logger.info("🔄 Pipeline main loop started")
+
+        if self.macro_agent:
+            logger.info("Agent => Macro cron loop is already started (Layer 2).")
+            
+        if self._position_manager:
+            asyncio.create_task(
+                self._position_manager.start(),
+                name="position_manager"
+            )
 
         # ── Briefing Inicial de Mercado ────────────────────────────────
         if self.execution_engine:
@@ -396,6 +409,7 @@ class NexusPipeline:
             metadata={
                 "reason": signal_result.get("reason", ""),
                 "indicators": signal_result.get("indicators", {}),
+                "atr": signal_result.get("indicators", {}).get("atr", 0.0),
             },
         )
 
@@ -454,6 +468,20 @@ class NexusPipeline:
             if result.payout > 0:
                 # IQ Option: log the trade return
                 self._returns_history.append(result.payout / 100.0)
+
+            # ── Active Position Management Delegation ─────────────────────
+            if self._position_manager and result.status == ExecutionStatus.FILLED:
+                pos = OpenPosition(
+                    asset=asset,
+                    direction="buy" if direction in (SignalDirection.BUY, SignalDirection.CALL) else "sell",
+                    entry_price=result.executed_price,
+                    original_size=size,
+                    remaining_size=size,
+                    stop_loss=trade_signal.stop_loss or 0.0,
+                    take_profit=trade_signal.take_profit or 0.0,
+                    atr_at_entry=trade_signal.metadata.get("atr", 0.0),
+                )
+                self._position_manager.register_position(pos)
 
             # Telegram: Trade Result alert (fire-and-forget)
             try:
@@ -663,6 +691,12 @@ class NexusPipeline:
             await self.opportunity_agent.stop()
         if self.execution_engine:
             await self.execution_engine.disconnect()
+        if self.risk_manager:
+            self.risk_manager.close()
+            
+        if self._position_manager:
+            await self._position_manager.stop()
+
         if self.data_lake:
             await self.data_lake.disconnect()
         if self.redis_client:
