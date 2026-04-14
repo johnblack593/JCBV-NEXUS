@@ -67,6 +67,7 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
         self._api: Optional[IQ_Option] = None
         self._connected = False
         self._lock = asyncio.Lock()
+        self._order_in_flight = False
 
     @staticmethod
     def _sanitize_asset(asset: str) -> str:
@@ -84,7 +85,8 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
         return self._connected and self._api is not None
 
     async def connect(self) -> bool:
-        if self._connected and self._api and self._api.check_connect():
+        # Fast-path local: evita lock y I/O si ya conectado
+        if self._connected and self._api is not None:
             return True
 
         if not IQ_Option:
@@ -104,7 +106,14 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
                 logger.info(f"Conectando a IQ Option con {self._email} (Intento {attempt})...")
                 self._api = IQ_Option(self._email, self._password)
 
-                check, reason = await asyncio.to_thread(self._api.connect)
+                try:
+                    check, reason = await asyncio.to_thread(self._api.connect)
+                except Exception as conn_exc:
+                    logger.warning(
+                        f"⚠️ Excepción en API.connect() intento {attempt}: {conn_exc}"
+                    )
+                    check = False
+                    reason = str(conn_exc)
 
                 if check:
                     self._connected = True
@@ -234,36 +243,30 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
                 latency_ms=(time.perf_counter() - t_start) * 1000,
             )
 
-        # Fire order with auto-reconnect logic
+        # Safety: no retry on buy() exception — possible order in flight
+        self._order_in_flight = True
         try:
             check, id_req = await asyncio.to_thread(
-                self._api.buy, signal.size, asset_clean, action, signal.expiration_minutes
+                self._api.buy, signal.size, asset_clean, action,
+                signal.expiration_minutes
             )
         except Exception as e:
-            logger.warning(f"⚠️ Conexión perdida durante ejecución. Reiniciando motor IQ... Error: {e}")
+            logger.warning(
+                f"⚠️ Excepción durante buy() — posible orden en vuelo. "
+                f"NO se reintenta para evitar doble entrada. Error: {e}"
+            )
             self._connected = False
-
-            # Intenta reconectar exactamente una vez INMEDIATAMENTE
-            if await self.connect():
-                try:
-                    check, id_req = await asyncio.to_thread(
-                        self._api.buy, signal.size, asset_clean, action, signal.expiration_minutes
-                    )
-                except Exception as e2:
-                    logger.error(f"❌ Falla definitiva en ejecución tras reconectar: {e2}")
-                    return TradeResult(
-                        order_id="N/A", venue=self.venue, asset=signal.asset,
-                        direction=signal.direction, status=ExecutionStatus.ERROR,
-                        size=signal.size, executed_price=0.0, payout=payout,
-                        latency_ms=(time.perf_counter() - t_start) * 1000,
-                    )
-            else:
-                return TradeResult(
-                    order_id="N/A", venue=self.venue, asset=signal.asset,
-                    direction=signal.direction, status=ExecutionStatus.ERROR,
-                    size=signal.size, executed_price=0.0, payout=payout,
-                    latency_ms=(time.perf_counter() - t_start) * 1000,
-                )
+            return TradeResult(
+                order_id="UNKNOWN_IN_FLIGHT",
+                venue=self.venue, asset=signal.asset,
+                direction=signal.direction,
+                status=ExecutionStatus.UNKNOWN,
+                size=signal.size, executed_price=0.0, payout=payout,
+                latency_ms=(time.perf_counter() - t_start) * 1000,
+                error_message=f"Order in flight — possible duplicate: {e}",
+            )
+        finally:
+            self._order_in_flight = False
 
         latency = (time.perf_counter() - t_start) * 1000
 
@@ -319,6 +322,12 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
                 logger.info(f"⚪ TRADE TIE | Order #{order_id} | Capital devuelto")
             else:
                 logger.warning(f"⚠️ TRADE TIMEOUT | Order #{order_id} | Sin resultado")
+            
+            # "loose" es typo histórico de la IQ Option API → normalizamos a "lose"
+            # Normalizar resultado a strings canónicos
+            if result == "loose":
+                result = "lose"
+
             return result, profit
         except Exception as e:
             logger.error(f"Error verificando resultado del trade #{order_id}: {e}")
@@ -352,7 +361,7 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
             if not candles:
                 break
 
-            all_candles.extend(reversed(candles))
+            all_candles.extend(candles)
             oldest_time = candles[0]['from']
             end_from_time = oldest_time - 1
             remaining -= len(candles)
@@ -364,7 +373,7 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
         if not all_candles:
             return pd.DataFrame()
 
-        all_candles.reverse()
+        # sort garantiza orden cronológico independiente del orden de la API
         df = pd.DataFrame(all_candles)
         df['open_time'] = pd.to_datetime(df['from'], unit='s', utc=True)
         df['close_time'] = pd.to_datetime(df['to'], unit='s', utc=True)

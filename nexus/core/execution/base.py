@@ -47,6 +47,7 @@ class ExecutionStatus(Enum):
     REJECTED = "REJECTED"
     CANCELLED = "CANCELLED"
     ERROR = "ERROR"
+    UNKNOWN = "UNKNOWN"
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -93,6 +94,7 @@ class TradeResult:
     payout: float = 0.0                 # IQ Option payout % (irrelevant for Binance)
     commission: float = 0.0             # Binance commission
     latency_ms: float = 0.0            # Signal -> Fill latency
+    error_message: Optional[str] = None # Error message if any
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     raw_response: Optional[Dict[str, Any]] = None
 
