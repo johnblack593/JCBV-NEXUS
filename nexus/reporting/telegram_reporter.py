@@ -573,14 +573,19 @@ class TelegramReporter:
                         continue
                     status = info.get("status", "error")
                     keys_tried = info.get("keys_tried", [])
+                    latency = info.get("latency_ms")
+                    error_category = info.get("error_category", "")
                     error_type = info.get("error_type", "")
-                    keys_str = ", ".join(keys_tried) if keys_tried else "ninguna"
+                    retryable = info.get("retryable", True)
+
                     if status == "ok":
                         any_ok = True
-                        msg += f"  ✅ {provider}: conectado — claves: {keys_str}\n"
+                        lat_str = f" — {latency:.0f}ms" if latency else ""
+                        msg += f"  ✅ {provider}: conectado{lat_str}\n"
                     else:
                         diag = self._classify_llm_error(error_type)
-                        msg += f"  ❌ {provider} ({len(keys_tried)} claves): {diag}\n"
+                        cat_tag = f" [{error_category}]" if error_category else ""
+                        msg += f"  ❌ {provider} ({len(keys_tried)} claves): {diag}{cat_tag}\n"
                 if not any_ok:
                     msg += f"  🔄 Modo activo: Heurístico\n"
 
@@ -784,6 +789,47 @@ class TelegramReporter:
         )
         await self._send_dev(msg)
 
+    def fire_llm_infra_error(
+        self,
+        provider: str,
+        category: str,
+        detail: str,
+        key_hash: str = "",
+        retryable: bool = True,
+        action: str = "",
+    ) -> None:
+        """Fire-and-forget DEV: error de infraestructura LLM (DNS/TCP/SSL/TIMEOUT).
+        La clave NO fue invalidada."""
+        self._fire(self._send_dev_llm_infra_error(
+            provider, category, detail, key_hash, retryable, action
+        ))
+
+    async def _send_dev_llm_infra_error(
+        self,
+        provider: str,
+        category: str,
+        detail: str,
+        key_hash: str,
+        retryable: bool,
+        action: str,
+    ) -> None:
+        retry_str = "Sí" if retryable else "No"
+        msg = (
+            f"🔌 *LLM — Error de Infraestructura*\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 *Proveedor:* {provider}\n"
+            f"🏷️ *Categoría:* {category}\n"
+            f"⚠️ *Detalle:* {detail}\n"
+            f"🔑 *Clave:* ...{key_hash} — CONSERVADA ✅\n"
+            f"🔄 *Reintentable:* {retry_str}\n"
+        )
+        if action:
+            msg += f"📋 *Acción:* {action}\n"
+        msg += (
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"⏱ {self._timestamp()}"
+        )
+        await self._send_dev(msg)
 
     async def _send_photo(self, photo_bytes: bytes, caption: str = "") -> None:
         """Envía una imagen al chat configurado."""

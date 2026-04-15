@@ -19,6 +19,12 @@ Rotación de claves:
   - Se prueba la siguiente clave disponible automáticamente.
   - Si todas las claves de un proveedor están en cooldown,
     se cae al siguiente proveedor.
+
+v5.0.1 — Clasificación precisa de errores:
+  - Errores de infraestructura (DNS/TIMEOUT/TCP/SSL) NO invalidan claves.
+  - Solo HTTP 401/403 invalida claves.
+  - Solo HTTP 429 pone claves en cooldown.
+  - HTTP 5xx mantiene la clave y pasa al siguiente proveedor.
 """
 
 from __future__ import annotations
@@ -34,6 +40,13 @@ from dotenv import load_dotenv
 
 from .groq_client import GroqClient
 from .gemini_client import GeminiClient
+from .diagnostics import (
+    classify_provider_error,
+    is_infrastructure_error,
+    CATEGORY_HTTP_401,
+    CATEGORY_HTTP_429,
+    CATEGORY_HTTP_5XX,
+)
 
 logger = logging.getLogger("nexus.llm.router")
 
@@ -48,6 +61,9 @@ class LLMRouter:
         self._cooldowns: Dict[str, float] = {}  # {key_hash: timestamp_until}
         self._invalid_keys: Set[str] = set()    # {key_hash}
         self._cooldown_seconds = int(os.getenv("LLM_COOLDOWN_SECONDS", "3600"))
+
+        # Last error tracking (for diagnostics)
+        self._last_errors: Dict[str, Dict] = {}  # {provider_name: classify_provider_error result}
 
         # Keys
         self._groq_keys: Deque[str] = deque(self._parse_keys("GROQ_API_KEYS", "GROQ_API_KEY"))
@@ -81,28 +97,12 @@ class LLMRouter:
     def _get_key_hash(self, key: str) -> str:
         return key[:8] if len(key) >= 8 else "HIDDEN"
 
-    def _is_rate_limit(self, exc: Exception) -> bool:
-        exc_str = str(exc).lower()
-        
-        # 429 status code implies rate limit
-        if "429" in exc_str:
-            return True
-        
-        rate_limit_keywords = [
-            "rate_limit", "quota", "exhausted", "limit exceeded",
-            "daily", "tokens per day", "too many requests"
-        ]
-        return any(kw in exc_str for kw in rate_limit_keywords)
-        
-    def _is_auth_error(self, exc: Exception) -> bool:
-        exc_str = str(exc).lower()
-        return "401" in exc_str or "403" in exc_str or "invalid api key" in exc_str or "unauthorized" in exc_str or "forbidden" in exc_str
-
     async def _try_provider(
         self, provider_name: str, keys: Deque[str], model: str, prompt: str, max_tokens: int
     ) -> str | None:
         tried_keys = 0
         total_keys = len(keys)
+        infra_failed = False  # Track if this provider has infra issues
         
         from nexus.reporting.telegram_reporter import TelegramReporter
 
@@ -125,6 +125,14 @@ class LLMRouter:
                     # Cooldown expired
                     del self._cooldowns[key_hash]
 
+            # If we already know infra is down for this provider, skip remaining keys
+            if infra_failed:
+                logger.debug(
+                    "LLMRouter: Saltando clave [%s] de %s — infraestructura fallida.",
+                    key_hash, provider_name.capitalize()
+                )
+                continue
+
             # Try request
             client = None
             try:
@@ -135,30 +143,89 @@ class LLMRouter:
                     
                 result = await client.complete(prompt, max_tokens=max_tokens)
                 await client.close()
+                # Clear any previous error for this provider
+                self._last_errors.pop(provider_name, None)
                 return result
                 
             except Exception as exc:
                 if client:
                     await client.close()
-                    
-                if self._is_auth_error(exc):
+
+                # Classify the error precisely
+                diag = classify_provider_error(exc)
+                category = diag["category"]
+                self._last_errors[provider_name] = diag
+
+                if is_infrastructure_error(category):
+                    # Infrastructure error — NOT the key's fault
+                    # Don't invalidate or cooldown the key
+                    # Stop trying more keys for this provider (same infra will fail)
+                    infra_failed = True
+                    logger.warning(
+                        "LLMRouter: %s error de infraestructura [%s] con clave [%s] — "
+                        "NO se invalida la clave. Causa: %s",
+                        provider_name.capitalize(), category,
+                        key_hash, diag["human_message"]
+                    )
+                    # Telegram DEV: infra error notification
+                    try:
+                        reporter = TelegramReporter.get_instance()
+                        if reporter and hasattr(reporter, "fire_llm_infra_error"):
+                            reporter.fire_llm_infra_error(
+                                provider=provider_name.capitalize(),
+                                category=category,
+                                detail=diag["human_message"],
+                                key_hash=key_hash,
+                                retryable=diag["retryable"],
+                                action="Clave conservada, proveedor omitido temporalmente",
+                            )
+                    except Exception:
+                        pass
+
+                elif category == CATEGORY_HTTP_401:
+                    # Auth error — invalidate this specific key
                     self._invalid_keys.add(key_hash)
-                    logger.error("Clave %s [%s] inválida — se descarta.", provider_name.capitalize(), key_hash)
-                
-                elif self._is_rate_limit(exc):
+                    logger.error(
+                        "Clave %s [%s] inválida (HTTP 401) — se descarta permanentemente.",
+                        provider_name.capitalize(), key_hash
+                    )
+
+                elif category == CATEGORY_HTTP_429:
+                    # Rate limit — cooldown this specific key
                     cooldown_until = time.time() + self._cooldown_seconds
                     self._cooldowns[key_hash] = cooldown_until
-                    logger.warning("Clave %s [%s] en rate limit. Cooldown: %s min.", 
-                                   provider_name.capitalize(), key_hash, self._cooldown_seconds // 60)
-                    
+                    logger.warning(
+                        "Clave %s [%s] en rate limit (HTTP 429). Cooldown: %s min.",
+                        provider_name.capitalize(), key_hash,
+                        self._cooldown_seconds // 60
+                    )
                     try:
                         reporter = TelegramReporter.get_instance()
                         if reporter and hasattr(reporter, "fire_key_cooldown"):
-                            reporter.fire_key_cooldown(provider_name.capitalize(), key_hash, self._cooldown_seconds // 60)
+                            reporter.fire_key_cooldown(
+                                provider_name.capitalize(), key_hash,
+                                self._cooldown_seconds // 60
+                            )
                     except Exception:
                         pass
+
+                elif category == CATEGORY_HTTP_5XX:
+                    # Server error — keep key valid, try next provider
+                    logger.warning(
+                        "LLMRouter: %s servidor devolvió 5xx con clave [%s] — "
+                        "clave conservada, pasando al siguiente proveedor.",
+                        provider_name.capitalize(), key_hash
+                    )
+                    # Don't try more keys for this provider (server is down)
+                    infra_failed = True
+
                 else:
-                    logger.warning("LLMRouter: %s error inesperado con clave [%s] — %s", provider_name.capitalize(), key_hash, exc)
+                    # Unknown or BAD_REQUEST — log but keep key
+                    logger.warning(
+                        "LLMRouter: %s error [%s] con clave [%s] — %s",
+                        provider_name.capitalize(), category,
+                        key_hash, diag["raw_error"][:150]
+                    )
                     
         return None
 
@@ -194,12 +261,26 @@ class LLMRouter:
                 
             logger.warning("LLMRouter: Todas las claves de %s fallaron o están agotadas.", name.capitalize())
 
+        # All providers failed
         logger.error("LLMRouter: All providers failed. Returning None.")
         try:
             from nexus.reporting.telegram_reporter import TelegramReporter
             reporter = TelegramReporter.get_instance()
-            if reporter and hasattr(reporter, "fire_llm_fallback"):
-                reporter.fire_llm_fallback("Todos", "Limits exhausted or unavailable")
+            # Build providers_tried info for detailed notification
+            providers_tried = []
+            for name, keys, _ in (providers if prefer != "gemini" else reversed(providers)):
+                last_err = self._last_errors.get(name, {})
+                providers_tried.append({
+                    "name": name.capitalize(),
+                    "keys_count": len(keys),
+                    "error_type": last_err.get("human_message", "Sin información"),
+                    "error_category": last_err.get("category", "UNKNOWN"),
+                    "retryable": last_err.get("retryable", True),
+                })
+            if reporter and hasattr(reporter, "fire_llm_unavailable"):
+                reporter.fire_llm_unavailable(providers_tried=providers_tried)
+            elif reporter and hasattr(reporter, "fire_llm_fallback"):
+                reporter.fire_llm_fallback("Todos", "Providers unavailable")
         except Exception:
             pass
             

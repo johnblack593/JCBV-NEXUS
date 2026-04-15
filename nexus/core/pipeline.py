@@ -235,7 +235,7 @@ class NexusPipeline:
         await self.telegram.initialize()
         if connected:
             # Build infrastructure report for startup notification
-            infra_report = self._build_infrastructure_report(
+            infra_report = await self._build_infrastructure_report(
                 redis_host=os.getenv("REDIS_HOST", "localhost"),
                 redis_port=int(os.getenv("REDIS_PORT", "6379")),
                 redis_ok=self.redis_client is not None,
@@ -875,14 +875,17 @@ class NexusPipeline:
         except Exception:
             return 20.0
 
-    def _build_infrastructure_report(
+    async def _build_infrastructure_report(
         self,
         redis_host: str = "localhost",
         redis_port: int = 6379,
         redis_ok: bool = False,
         questdb_ok: bool = False,
     ) -> Dict[str, Any]:
-        """Builds infrastructure status dict for Telegram startup notification."""
+        """
+        Builds infrastructure status dict for Telegram startup notification.
+        Runs real preflight connectivity checks against LLM providers.
+        """
         report: Dict[str, Any] = {}
 
         # Redis
@@ -897,58 +900,40 @@ class NexusPipeline:
         else:
             report["questdb_status"] = "OFFLINE:persistencia de operaciones deshabilitada"
 
-        # LLM status from LLMRouter
-        llm_status = {}
+        # LLM status — real preflight connectivity check
+        llm_status = None
         try:
             from nexus.core.llm.llm_router import LLMRouter
+            from nexus.core.llm.diagnostics import run_preflight_all
+
             router = LLMRouter.get_instance()
+            groq_keys = list(router._groq_keys) if router._groq_keys else []
+            gemini_keys = list(router._gemini_keys) if router._gemini_keys else []
 
-            # Groq keys
-            if router._groq_keys:
-                groq_hints = [k[:8] for k in router._groq_keys]
-                # Check if all keys are in cooldown or invalid
-                all_bad = all(
-                    router._get_key_hash(k) in router._cooldowns
-                    or router._get_key_hash(k) in router._invalid_keys
-                    for k in router._groq_keys
+            if groq_keys or gemini_keys:
+                llm_status = await run_preflight_all(
+                    groq_keys=groq_keys,
+                    gemini_keys=gemini_keys,
+                    groq_model=router._groq_model,
+                    gemini_model=router._gemini_model,
                 )
-                if all_bad:
-                    llm_status["Groq"] = {
-                        "status": "error",
-                        "keys_tried": groq_hints,
-                        "error_type": "Límite API",
-                    }
-                else:
-                    llm_status["Groq"] = {
-                        "status": "ok",
-                        "keys_tried": groq_hints,
-                        "error_type": "",
-                    }
+                # Log preflight results
+                for prov, info in (llm_status or {}).items():
+                    if info.get("status") == "ok":
+                        logger.info(
+                            "🤖 LLM Preflight %s: OK (%s ms)",
+                            prov, info.get("latency_ms", "?")
+                        )
+                    else:
+                        logger.warning(
+                            "🤖 LLM Preflight %s: FALLO [%s] — %s",
+                            prov, info.get("error_category", "?"),
+                            info.get("error_type", "desconocido")
+                        )
+        except Exception as exc:
+            logger.warning("Error ejecutando preflight LLM: %s", exc)
 
-            # Gemini keys
-            if router._gemini_keys:
-                gemini_hints = [k[:8] for k in router._gemini_keys]
-                all_bad = all(
-                    router._get_key_hash(k) in router._cooldowns
-                    or router._get_key_hash(k) in router._invalid_keys
-                    for k in router._gemini_keys
-                )
-                if all_bad:
-                    llm_status["Gemini"] = {
-                        "status": "error",
-                        "keys_tried": gemini_hints,
-                        "error_type": "Límite API",
-                    }
-                else:
-                    llm_status["Gemini"] = {
-                        "status": "ok",
-                        "keys_tried": gemini_hints,
-                        "error_type": "",
-                    }
-        except Exception:
-            pass  # LLM router not available
-
-        report["llm_status"] = llm_status if llm_status else None
+        report["llm_status"] = llm_status
 
         # MacroAgent
         if self.macro_agent:
