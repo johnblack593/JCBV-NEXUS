@@ -40,6 +40,11 @@ class GeminiClient:
         self._timeout = aiohttp.ClientTimeout(total=timeout_s)
         self._session: Optional[RetryClient] = None
 
+    def set_model(self, model_name: str) -> None:
+        """Actualiza el modelo activo. Llamado por ModelDiscoveryService."""
+        self._model = model_name
+        logger.info(f"[{self.__class__.__name__}] Modelo activo: {model_name}")
+
     async def _ensure_session(self) -> RetryClient:
         """Lazily initializes the aiohttp RetryClient on first call."""
         if self._session is None or self._session._client_session.closed:
@@ -74,7 +79,12 @@ class GeminiClient:
 
         url = f"{_BASE_URL}/{self._model}:generateContent?key={self._api_key}"
         payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": prompt}]
+                }
+            ],
             "generationConfig": {
                 "temperature": 0.1,
                 "maxOutputTokens": max_tokens,

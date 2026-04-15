@@ -84,6 +84,13 @@ class LLMRouter:
             cls._instance = cls()
         return cls._instance
 
+    def set_model(self, provider: str, model_name: str) -> None:
+        """Actualiza el modelo activo para un proveedor."""
+        if provider.lower() == "groq":
+            self._groq_model = model_name
+        elif provider.lower() == "gemini":
+            self._gemini_model = model_name
+
     def _parse_keys(self, env_plural: str, env_singular: str) -> list[str]:
         keys_str = os.getenv(env_plural, "").strip()
         if not keys_str:

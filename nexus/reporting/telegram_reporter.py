@@ -577,6 +577,7 @@ class TelegramReporter:
 
             # LLM status
             llm_status = ir.get("llm_status")
+            model_discovery = ir.get("model_discovery", {})
             if llm_status and isinstance(llm_status, dict):
                 msg += f"━━━━━━━━━━━━━━━━━━━\n"
                 msg += f"🤖 *Estado de LLMs*\n"
@@ -591,10 +592,29 @@ class TelegramReporter:
                     error_type = info.get("error_type", "")
                     retryable = info.get("retryable", True)
 
+                    # Obtener información de model_discovery
+                    discovery = model_discovery.get(provider.lower(), {})
+                    model_name = discovery.get("selected", "")
+                    source = discovery.get("source", "")
+                    if source == "api":
+                        source_icon = " ✅ "
+                        source_label = "(API)"
+                    elif source == "preferred_fallback":
+                        source_icon = " ⚠️ "
+                        source_label = "(fallback)"
+                    elif source == "api_first_available":
+                        source_icon = " ⚠️ "
+                        source_label = "(primer disponible)"
+                    else:
+                        source_icon = ""
+                        source_label = ""
+                        
+                    model_str = f"\n{source_icon} modelo: {model_name} {source_label}" if model_name else ""
+
                     if status == "ok":
                         any_ok = True
                         lat_str = f" — {latency:.0f}ms" if latency else ""
-                        msg += f"  ✅ {provider}: conectado{lat_str}\n"
+                        msg += f"  ✅ {provider}: conectado{lat_str}{model_str}\n"
                     else:
                         diag = self._classify_llm_error(error_type)
                         cat_tag = f" [{error_category}]" if error_category else ""

@@ -127,10 +127,37 @@ async def run_smoke_test() -> int:
     dominant_error = None
     results_summary: list[dict] = []
 
+    print("  📋 Modelos seleccionados automáticamente:")
+    
+    # IMPORTANTE: correr model discovery en el smoke test
+    try:
+        from nexus.core.llm.model_discovery import ModelDiscoveryService
+        import logging
+        logging.getLogger("nexus.llm.discovery").setLevel(logging.ERROR) # Silenciar warnings para el smoke test
+        discovery_svc = ModelDiscoveryService()
+        g_key = groq_keys[0] if groq_keys else None
+        m_key = gemini_keys[0] if gemini_keys else None
+        discovery = await discovery_svc.discover_all(groq_key=g_key, gemini_key=m_key)
+        
+        groq_model = discovery["groq"]["selected"]
+        groq_source = discovery["groq"]["source"]
+        gemini_model = discovery["gemini"]["selected"]
+        gemini_source = discovery["gemini"]["source"]
+        
+        print(f"     Groq   → {groq_model:<25} (fuente: {groq_source})")
+        print(f"     Gemini → {gemini_model:<25} (fuente: {gemini_source})")
+    except Exception as e:
+        print(f"     ❌ Fallo el autodiscovery: {e}")
+        groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip()
+        print(f"     Usando variables de entorno o fallbacks:")
+        print(f"     Groq   → {groq_model}")
+        print(f"     Gemini → {gemini_model}")
+    print()
+
     # ── Groq ──────────────────────────────────────────────────────────
     if groq_keys:
         print(f"  📦 Groq ({len(groq_keys)} claves configuradas)")
-        print(f"     Modelo: {groq_model}")
         print()
 
         for i, key in enumerate(groq_keys, 1):
@@ -171,7 +198,6 @@ async def run_smoke_test() -> int:
     # ── Gemini ────────────────────────────────────────────────────────
     if gemini_keys:
         print(f"  📦 Gemini ({len(gemini_keys)} claves configuradas)")
-        print(f"     Modelo: {gemini_model}")
         print()
 
         for i, key in enumerate(gemini_keys, 1):

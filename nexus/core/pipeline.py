@@ -257,6 +257,26 @@ class NexusPipeline:
             self._daily_trades = prev_state.get("trades_today", 0)
 
         if connected:
+            from nexus.core.llm.model_discovery import ModelDiscoveryService
+            from nexus.core.llm.llm_router import LLMRouter
+
+            discovery_svc = ModelDiscoveryService()
+            groq_env = os.getenv("GROQ_API_KEYS", os.getenv("GROQ_API_KEY", ""))
+            gem_env = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
+            g_key = groq_env.split(",")[0].strip() if groq_env else None
+            m_key = gem_env.split(",")[0].strip() if gem_env else None
+            
+            # Llamar await service.discover_all
+            discovery = await discovery_svc.discover_all(groq_key=g_key, gemini_key=m_key)
+            
+            # Guardamos para reporter
+            self._model_discovery = discovery
+            
+            # Actualizar el modelo activo (se llama set_model)
+            router = LLMRouter.get_instance()
+            router.set_model("groq", discovery["groq"]["selected"])
+            router.set_model("gemini", discovery["gemini"]["selected"])
+
             # Build infrastructure report for startup notification
             infra_report = await self._build_infrastructure_report(
                 redis_host=os.getenv("REDIS_HOST", "localhost"),
@@ -264,6 +284,19 @@ class NexusPipeline:
                 redis_ok=self.redis_client is not None,
                 questdb_ok=dl_connected,
             )
+            
+            # Incluir el resultado de model_discovery
+            infra_report["model_discovery"] = {
+                "groq": {
+                    "selected": discovery["groq"]["selected"],
+                    "source": discovery["groq"]["source"]
+                },
+                "gemini": {
+                    "selected": discovery["gemini"]["selected"],
+                    "source": discovery["gemini"]["source"]
+                }
+            }
+            
             self.telegram.fire_startup(
                 self.venue, balance,
                 dry_run=self.dry_run_mode,
