@@ -155,6 +155,9 @@ async def run_smoke_test() -> int:
                 emoji = _CATEGORY_COLORS.get(cat, "❓")
                 print(f"❌ ERROR {cat}  {emoji}")
                 print(f"         Detalle: {detail}")
+                if cat == "UNKNOWN" and "raw_error" in result:
+                    raw = str(result["raw_error"]).replace("\n", " ")
+                    print(f"         Raw: {raw}")
                 if dominant_error is None:
                     dominant_error = cat
 
@@ -192,6 +195,9 @@ async def run_smoke_test() -> int:
                 emoji = _CATEGORY_COLORS.get(cat, "❓")
                 print(f"❌ ERROR {cat}  {emoji}")
                 print(f"         Detalle: {detail}")
+                if cat == "UNKNOWN" and "raw_error" in result:
+                    raw = str(result["raw_error"]).replace("\n", " ")
+                    print(f"         Raw: {raw}")
                 if dominant_error is None:
                     dominant_error = cat
 
@@ -236,6 +242,17 @@ async def run_smoke_test() -> int:
 
     print(separator)
     print()
+
+    # Seccion final: ERRORES NO CLASIFICADOS
+    unknown_results = [r for r in results_summary if r.get("error_category") == "UNKNOWN" and r.get("raw_error")]
+    if unknown_results:
+        print()
+        print("  ⚠️  ERRORES NO CLASIFICADOS (detalles técnicos):")
+        print("  " + "─" * 45)
+        for i, r in enumerate(unknown_results, 1):
+            prov = r.get("provider", "Unknown")
+            print(f"  [{prov}] Clave {i}: {r.get('raw_error')}")
+            print()
 
     return 0 if any_ok else 1
 

@@ -27,11 +27,21 @@ import logging
 import re
 import socket
 import sys
+import json
 import time
 from typing import Any, Dict, Optional
 
 import aiohttp
 import asyncio
+
+try:
+    from google.api_core.exceptions import (
+        PermissionDenied, ResourceExhausted, NotFound,
+        InvalidArgument, ServiceUnavailable
+    )
+    _HAS_GOOGLE_API_CORE = True
+except ImportError:
+    _HAS_GOOGLE_API_CORE = False
 
 logger = logging.getLogger("nexus.llm.diagnostics")
 
@@ -156,6 +166,8 @@ def classify_provider_error(
         "connect call failed", "network is unreachable",
     ]):
         category = CATEGORY_TCP
+    elif isinstance(exc, aiohttp.ClientConnectionError):
+        category = CATEGORY_TCP
 
     # ── 4. SSL/TLS errors ────────────────────────────────────────────
     elif any(p in lower for p in [
@@ -171,9 +183,22 @@ def classify_provider_error(
             category = CATEGORY_HTTP_429
         elif 500 <= status_code < 600:
             category = CATEGORY_HTTP_5XX
-        elif status_code == 400:
+        elif status_code in (400, 404):
             category = CATEGORY_BAD_REQUEST
-    else:
+    elif isinstance(exc, json.JSONDecodeError):
+        category = CATEGORY_BAD_REQUEST
+    elif isinstance(exc, aiohttp.ClientResponseError):
+        if exc.status in (401, 403): category = CATEGORY_HTTP_401
+        elif exc.status == 429: category = CATEGORY_HTTP_429
+        elif exc.status in (400, 404): category = CATEGORY_BAD_REQUEST
+        elif 500 <= exc.status < 600: category = CATEGORY_HTTP_5XX
+    elif _HAS_GOOGLE_API_CORE:
+        if isinstance(exc, PermissionDenied): category = CATEGORY_HTTP_401
+        elif isinstance(exc, ResourceExhausted): category = CATEGORY_HTTP_429
+        elif isinstance(exc, ServiceUnavailable): category = CATEGORY_HTTP_5XX
+        elif isinstance(exc, (NotFound, InvalidArgument)): category = CATEGORY_BAD_REQUEST
+
+    if category == CATEGORY_UNKNOWN:
         # Try to extract HTTP status from error message
         if "401" in raw or "unauthorized" in lower or "invalid api key" in lower:
             category = CATEGORY_HTTP_401
@@ -198,7 +223,7 @@ def classify_provider_error(
     return {
         "category": category,
         "human_message": _HUMAN_MESSAGES.get(category, _HUMAN_MESSAGES[CATEGORY_UNKNOWN]),
-        "raw_error": raw[:500],
+        "raw_error": raw[:1000],
         "retryable": retryable,
         "suggested_action": _SUGGESTED_ACTIONS.get(category, _SUGGESTED_ACTIONS[CATEGORY_UNKNOWN]),
     }
@@ -238,6 +263,7 @@ async def preflight_groq(
             "latency_ms": float | None,
             "error_category": str | None,
             "error_detail": str | None,
+            "raw_error": str | None,
             "retryable": bool,
         }
     """
@@ -288,11 +314,12 @@ async def preflight_groq(
 
                 body = await resp.text()
                 diag = classify_provider_error(
-                    Exception(f"HTTP {resp.status}: {body[:200]}"),
+                    Exception(f"HTTP {resp.status}: {body[:1000]}"),
                     status_code=resp.status,
                 )
                 result["error_category"] = diag["category"]
                 result["error_detail"] = diag["human_message"]
+                result["raw_error"] = diag["raw_error"]
                 result["retryable"] = diag["retryable"]
 
                 if resp.status in (401, 403):
@@ -306,6 +333,7 @@ async def preflight_groq(
         diag = classify_provider_error(exc)
         result["error_category"] = diag["category"]
         result["error_detail"] = diag["human_message"]
+        result["raw_error"] = diag["raw_error"]
         result["retryable"] = diag["retryable"]
 
         if diag["category"] == CATEGORY_DNS:
@@ -337,6 +365,7 @@ async def preflight_gemini(
         "latency_ms": None,
         "error_category": None,
         "error_detail": None,
+        "raw_error": None,
         "retryable": True,
     }
 
@@ -371,11 +400,12 @@ async def preflight_gemini(
 
                 body = await resp.text()
                 diag = classify_provider_error(
-                    Exception(f"HTTP {resp.status}: {body[:200]}"),
+                    Exception(f"HTTP {resp.status}: {body[:1000]}"),
                     status_code=resp.status,
                 )
                 result["error_category"] = diag["category"]
                 result["error_detail"] = diag["human_message"]
+                result["raw_error"] = diag["raw_error"]
                 result["retryable"] = diag["retryable"]
 
                 if resp.status in (400,) and "api key not valid" in body.lower():
@@ -393,6 +423,7 @@ async def preflight_gemini(
         diag = classify_provider_error(exc)
         result["error_category"] = diag["category"]
         result["error_detail"] = diag["human_message"]
+        result["raw_error"] = diag["raw_error"]
         result["retryable"] = diag["retryable"]
 
         if diag["category"] == CATEGORY_DNS:
