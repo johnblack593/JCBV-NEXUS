@@ -499,18 +499,36 @@ class NexusPipeline:
         if signal_dir == "HOLD":
             return
 
-        # ── Step 7: Confidence Gate ──────────────────────────────────
+        # ── Step 7: Regime-Aware Adjustments (BUG FIX) ───────────────
+        raw_confidence = confidence
         min_conf = self._config.get("min_confidence", 0.55)
-        if confidence < min_conf:
-            logger.debug(
-                f"Señal {signal_dir} conf={confidence:.3f} < {min_conf}. Omitida."
+        regime_factor = 1.0
+        
+        # Ajustar umbrales según régimen
+        min_conf_yellow = 0.65
+        min_conf_red = 0.75
+        
+        if regime == MacroRegime.YELLOW:
+            regime_factor = 0.8  # Reduce confidence 20%
+            min_conf = min_conf_yellow
+            logger.info("🟡 RÉGIMEN AMARILLO — aplicando reducción de confianza 20%")
+        elif regime == MacroRegime.RED:
+            regime_factor = 0.5
+            min_conf = min_conf_red
+        elif regime == MacroRegime.GREEN:
+            min_conf = self._config.get("min_confidence", 0.55)
+            
+        effective_confidence = raw_confidence * regime_factor
+
+        # ── Step 8: Confidence Gate ──────────────────────────────────
+        if effective_confidence < min_conf:
+            logger.info(
+                f"⛔ SEÑAL RECHAZADA | {asset} | conf. base: {raw_confidence:.1%} | régimen: {regime.name} "
+                f"→ conf. efectiva: {effective_confidence:.1%} < umbral: {min_conf:.1%} | Razón: confianza insuficiente"
             )
             return
-
-        # ── Step 8: Regime-Aware Adjustments ─────────────────────────
-        if regime == MacroRegime.YELLOW:
-            confidence *= 0.8  # Reduce confidence 20%
-            logger.info("🟡 RÉGIMEN AMARILLO — confianza reducida 20%")
+            
+        confidence = effective_confidence
 
         # ── Step 9: Position Sizing (Layer 4) ────────────────────────
         size = await self._calculate_size(confidence, df)
@@ -653,13 +671,47 @@ class NexusPipeline:
                 _size=result.size, _payout=result.payout, _venue=self.venue,
                 _asset=asset,
             ):
-                await asyncio.sleep(65)  # Esperar vencimiento de la opción binaria
-                try:
-                    final_balance = await self.execution_engine.get_balance()
-                except Exception:
-                    final_balance = 0.0
-                _outcome = "WIN" if _payout > 0 else "LOSS"
-                _pnl = _size * (_payout / 100.0) if _outcome == "WIN" else -_size
+                # Delegar espera de resultado real en vez de usar sleep
+                if hasattr(self.execution_engine, "check_trade_result"):
+                    try:
+                        oid = int(_result.order_id)
+                        # Este metodo ya incluye espera internamente, se bloquea localmente a la tarea
+                        # Usando check_trade_result con espera explícita si no implementa execute_and_wait_result
+                        if hasattr(self.execution_engine, "_wait_for_position_result"):
+                            res_dict = await self.execution_engine._wait_for_position_result(oid, timeout=120)
+                            _outcome = res_dict["outcome"]
+                            _pnl = res_dict["profit_net"]
+                            final_balance = res_dict["balance_after"]
+                        else:
+                            await asyncio.sleep(65)
+                            out, profit_net = await self.execution_engine.check_trade_result(oid)
+                            if out == "win":
+                                _outcome = "WIN"
+                            elif out == "lose":
+                                _outcome = "LOSS"
+                            elif out == "equal":
+                                _outcome = "TIE"
+                            else:
+                                _outcome = "UNKNOWN"
+                            _pnl = profit_net if profit_net is not None else 0.0
+                            
+                            if hasattr(self.execution_engine, "get_real_balance"):
+                                final_balance = await self.execution_engine.get_real_balance()
+                            else:
+                                final_balance = await self.execution_engine.get_balance()
+                    except Exception as e:
+                        logger.error(f"Error checking trade result: {e}")
+                        _outcome = "UNKNOWN"
+                        _pnl = 0.0
+                        final_balance = 0.0
+                else:
+                    await asyncio.sleep(65)  # Fallback simulación
+                    try:
+                        final_balance = await self.execution_engine.get_balance()
+                    except Exception:
+                        final_balance = 0.0
+                    _outcome = "WIN" if _payout > 0 else "LOSS"
+                    _pnl = _size * (_payout / 100.0) if _outcome == "WIN" else -_size
 
                 self.telegram.fire_trade_result(
                     asset=_result.asset,
@@ -669,6 +721,7 @@ class NexusPipeline:
                     new_balance=final_balance,
                     outcome=_outcome,
                     venue=_venue,
+                    profit_net=_pnl
                 )
 
                 # Persist to local journal
@@ -683,6 +736,7 @@ class NexusPipeline:
                         "pnl": round(_pnl, 4),
                         "balance": round(final_balance, 2),
                         "venue": _venue,
+                        "latency_ms": result.latency_ms,
                     })
                     self.journal.log_equity(final_balance)
                     self.journal.save_session_state(

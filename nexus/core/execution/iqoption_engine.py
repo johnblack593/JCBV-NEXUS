@@ -333,6 +333,145 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
             logger.error(f"Error verificando resultado del trade #{order_id}: {e}")
             return None, None
 
+    # ── Implementación de la Tarea 1: Ejecución con espera asíncrona explícita ──
+
+    def _determine_outcome(self, win_amount: float, amount_invested: float) -> tuple:
+        """
+        Retorna (outcome: str, profit_net: float)
+        """
+        if win_amount > amount_invested:
+            # Ganó: win_amount incluye la inversión + ganancia
+            profit_net = win_amount - amount_invested
+            return "WIN", profit_net
+        elif win_amount == amount_invested:
+            # Empate (raro): recupera la inversión exacta
+            profit_net = 0.0
+            return "TIE", profit_net
+        elif win_amount > 0 and win_amount < amount_invested:
+            # Pérdida parcial (algunos activos tienen reembolso)
+            profit_net = win_amount - amount_invested
+            return "LOSS", profit_net
+        else:
+            # win_amount == 0: pérdida total
+            profit_net = -amount_invested
+            return "LOSS", profit_net
+
+    async def get_real_balance(self) -> float:
+        """
+        Consulta el balance real actual de la cuenta en IQ Option.
+        Usar el campo "balance" del perfil del websocket, o llamar
+        a la API REST de balance.
+        """
+        if not await self.connect():
+            return 0.0
+        # La librería iqoptionapi expone get_balance()
+        balance = await asyncio.to_thread(self._api.get_balance)
+        return float(balance)
+
+    async def _wait_for_position_result(
+        self,
+        order_id: int,
+        timeout: int = 120
+    ) -> dict:
+        """
+        Espera activamente a que termine la opción y extrae el resultado usando check_win_v4
+        y actualizando el balance inmediatamente.
+        """
+        out, profit = await self.check_trade_result(order_id)
+        if out is None:
+            return {
+                "outcome": "UNKNOWN",
+                "profit_net": 0.0,
+                "balance_after": await self.get_real_balance()
+            }
+            
+        if out == "win":
+            outcome = "WIN"
+        elif out == "lose":
+            outcome = "LOSS"
+        else:
+            outcome = "TIE"
+            
+        # Refresca el balance real despues de obtener resultado validado
+        balance = await self.get_real_balance()
+            
+        return {
+            "outcome": outcome,
+            "profit_net": profit,
+            "balance_after": balance
+        }
+
+    async def execute_and_wait_result(
+        self,
+        asset: str,
+        direction: str,
+        amount: float,
+        duration_minutes: int = 1,
+        timeout_seconds: int = 120,
+    ) -> dict:
+        """
+        Ejecuta la opción y espera el resultado REAL del websocket.
+        Retorna:
+        {
+          "order_id": "...",
+          "outcome": "WIN" | "LOSS" | "TIE" | "UNKNOWN" | "REJECTED",
+          "profit_net": float,       # positivo si ganó, negativo si perdió
+          "balance_after": float,    # balance real tras el resultado
+          "duration_ms": int,
+          "error_message": str|None
+        }
+        """
+        t_start = time.perf_counter()
+        
+        # 1. Adaptar direction param a TradeSignal para reutilizar execute
+        sig_dir = SignalDirection.CALL if direction.upper() in ("CALL", "BUY") else SignalDirection.PUT
+        signal = TradeSignal(
+            asset=asset,
+            direction=sig_dir,
+            size=amount,
+            confidence=0.9,
+            regime="normal",
+            expiration_minutes=duration_minutes
+        )
+        
+        # 2. Ejecutar
+        res = await self.execute(signal)
+        
+        if res.status != ExecutionStatus.FILLED:
+            return {
+                "order_id": res.order_id,
+                "outcome": "REJECTED" if res.status == ExecutionStatus.REJECTED else "UNKNOWN",
+                "profit_net": 0.0,
+                "balance_after": await self.get_real_balance(),
+                "duration_ms": int(res.latency_ms),
+                "error_message": res.error_message
+            }
+            
+        # 3. Esperar resultado real
+        try:
+            oid = int(res.order_id)
+        except ValueError:
+            return {
+                "order_id": res.order_id,
+                "outcome": "UNKNOWN",
+                "profit_net": 0.0,
+                "balance_after": await self.get_real_balance(),
+                "duration_ms": int((time.perf_counter() - t_start) * 1000),
+                "error_message": "Invalid order_id format"
+            }
+            
+        result_dict = await self._wait_for_position_result(oid, timeout=timeout_seconds)
+        
+        # Merge properties
+        return {
+            "order_id": res.order_id,
+            "outcome": result_dict["outcome"],
+            "profit_net": result_dict["profit_net"],
+            "balance_after": result_dict["balance_after"],
+            "duration_ms": int((time.perf_counter() - t_start) * 1000),
+            "error_message": None
+        }
+
     # ── Data Methods (IQ-specific) ────────────────────────────────
 
     _TF_MAP = {

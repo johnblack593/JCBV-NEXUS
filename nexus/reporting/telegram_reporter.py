@@ -340,12 +340,13 @@ class TelegramReporter:
         size: float,
         payout_pct: float,
         new_balance: float,
-        outcome: str,  # "WIN" or "LOSS"
+        outcome: str,  # "WIN" or "LOSS" or "TIE"
         venue: str = "IQ_OPTION",
+        profit_net: float = 0.0,
     ) -> None:
         """Fire-and-forget: Resultado del trade."""
         self._fire(self._send_trade_result(
-            asset, direction, size, payout_pct, new_balance, outcome, venue
+            asset, direction, size, payout_pct, new_balance, outcome, venue, profit_net
         ))
 
     async def _send_trade_result(
@@ -357,6 +358,7 @@ class TelegramReporter:
         new_balance: float,
         outcome: str,
         venue: str,
+        profit_net: float = 0.0,
     ) -> None:
         # Direction label in Spanish
         dir_label = {
@@ -365,9 +367,16 @@ class TelegramReporter:
         }.get(direction, direction)
 
         if outcome == "WIN":
-            pnl = size * (payout_pct / 100.0)
-        else:
-            pnl = -size
+            if profit_net == 0.0 and payout_pct > 0:
+                profit_net = size * (payout_pct / 100.0)
+            pnl = profit_net
+        elif outcome == "LOSS":
+            if profit_net == 0.0:
+                profit_net = -size
+            pnl = profit_net
+        else: # TIE
+            pnl = 0.0
+            profit_net = 0.0
 
         self._session_pnl += pnl
 
@@ -380,38 +389,40 @@ class TelegramReporter:
         self._weekly_equity.append(new_balance)
 
         if outcome == "WIN":
-            net_gain = size * payout_pct / 100.0
-            header = "✅ *OPERACIÓN GANADORA*"
-            pnl_line = f"🏆 *Ganancia neta:* +${net_gain:.2f}"
-            payout_line = f"📊 *Payout:* {payout_pct:.0f}%\n"
-            if self._session_pnl >= 0:
-                session_line = f"📈 *Ganancia de sesión:* +${self._session_pnl:.2f}"
-            else:
-                session_line = f"📉 *Pérdida de sesión:* -${abs(self._session_pnl):.2f}"
+            msg = (
+                f"✅ *OPERACIÓN GANADORA*\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"🪙 *Activo:* {asset} | {dir_label}\n"
+                f"💵 *Invertido:* ${size:.2f}\n"
+                f"🏆 *Ganancia neta:* +${profit_net:.2f}\n"
+                f"📊 *Payout:* {payout_pct:.0f}%\n"
+                f"💼 *Balance real:* ${new_balance:.2f}\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"⏱ {self._timestamp()}"
+            )
+        elif outcome == "LOSS":
+            msg = (
+                f"❌ *OPERACIÓN PERDIDA*\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"🪙 *Activo:* {asset} | {dir_label}\n"
+                f"💵 *Invertido:* ${size:.2f}\n"
+                f"📉 *Pérdida:* -${abs(profit_net):.2f}\n"
+                f"💼 *Balance real:* ${new_balance:.2f}\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"⏱ {self._timestamp()}"
+            )
         else:
-            header = "❌ *OPERACIÓN PERDEDORA*"
-            pnl_line = f"💸 *Pérdida:* -${size:.2f}"
-            payout_line = ""
-            if self._session_pnl >= 0:
-                session_line = f"📈 *Ganancia de sesión:* +${self._session_pnl:.2f}"
-            else:
-                session_line = f"📉 *Pérdida de sesión:* -${abs(self._session_pnl):.2f}"
+            msg = (
+                f"➖ *OPERACIÓN EMPATADA*\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"🪙 *Activo:* {asset} | {dir_label}\n"
+                f"💵 *Invertido:* ${size:.2f}\n"
+                f"💰 *Recuperado:* ${size:.2f}\n"
+                f"💼 *Balance real:* ${new_balance:.2f}\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"⏱ {self._timestamp()}"
+            )
 
-        msg = (
-            f"{header}\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
-            f"🪙 *Activo:* {asset} | {dir_label}\n"
-            f"💵 *Invertido:* ${size:.2f}\n"
-            f"{pnl_line}\n"
-        )
-        if payout_line:
-            msg += payout_line
-        msg += (
-            f"💼 *Balance:* ${new_balance:.2f}\n"
-            f"{session_line}\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
-            f"⏱ {self._timestamp()}"
-        )
         await self._send(msg)
 
     # ══════════════════════════════════════════════════════════════════
