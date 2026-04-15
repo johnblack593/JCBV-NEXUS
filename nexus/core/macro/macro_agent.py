@@ -305,8 +305,13 @@ class MacroAgent:
     async def _fetch_fear_greed(self) -> Dict[str, Any]:
         """Fetch Fear & Greed Index from alternative.me API."""
         try:
+            connector = aiohttp.TCPConnector(
+                resolver=aiohttp.ThreadedResolver(),
+                ttl_dns_cache=300,
+            )
             async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=10)
+                timeout=aiohttp.ClientTimeout(total=10),
+                connector=connector,
             ) as session:
                 async with session.get(self._FEAR_GREED_URL) as resp:
                     if resp.status == 200:

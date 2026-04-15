@@ -114,6 +114,12 @@ async def run_smoke_test() -> int:
     print(separator)
     print("  🤖 NEXUS v5.0 — Smoke Test de Conectividad LLM")
     print(separator)
+
+    # Platform detection: ThreadedResolver is critical on Windows
+    if sys.platform == "win32":
+        print("  ℹ️  Sistema: Windows — usando ThreadedResolver para DNS")
+    else:
+        print(f"  ℹ️  Sistema: {sys.platform}")
     print()
 
     any_ok = False

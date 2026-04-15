@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 import re
 import socket
+import sys
 import time
 from typing import Any, Dict, Optional
 
@@ -128,6 +129,15 @@ def classify_provider_error(
     ]
     if isinstance(exc, socket.gaierror) or any(p in lower for p in dns_patterns):
         category = CATEGORY_DNS
+        # Windows-specific hint: aiodns (c-ares) fails on ProactorEventLoop
+        if sys.platform == "win32" and isinstance(exc, socket.gaierror):
+            return {
+                "category": CATEGORY_DNS,
+                "human_message": "Error DNS en resolver async — usar ThreadedResolver en aiohttp",
+                "raw_error": raw[:500],
+                "retryable": True,
+                "suggested_action": "Asegurarse de que aiohttp.TCPConnector usa ThreadedResolver()",
+            }
 
     # ── 2. Timeout errors ─────────────────────────────────────────────
     elif isinstance(exc, (asyncio.TimeoutError,)):
@@ -260,7 +270,11 @@ async def preflight_groq(
 
     try:
         timeout = aiohttp.ClientTimeout(total=timeout_s)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        connector = aiohttp.TCPConnector(
+            resolver=aiohttp.ThreadedResolver(),
+            ttl_dns_cache=300,
+        )
+        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             result["dns_ok"] = True  # If we get past connect, DNS was ok
             async with session.post(endpoint, json=payload, headers=headers) as resp:
                 result["tcp_ok"] = True
@@ -339,7 +353,11 @@ async def preflight_gemini(
 
     try:
         timeout = aiohttp.ClientTimeout(total=timeout_s)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        connector = aiohttp.TCPConnector(
+            resolver=aiohttp.ThreadedResolver(),
+            ttl_dns_cache=300,
+        )
+        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             result["dns_ok"] = True
             async with session.post(url, json=payload) as resp:
                 result["tcp_ok"] = True

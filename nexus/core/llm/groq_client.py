@@ -51,7 +51,11 @@ class GroqClient:
                 factor=2.0,
                 statuses={429, 503},
             )
-            connector = aiohttp.TCPConnector(limit=5)
+            connector = aiohttp.TCPConnector(
+                resolver=aiohttp.ThreadedResolver(),
+                ttl_dns_cache=300,
+                limit=5,
+            )
             base_session = aiohttp.ClientSession(
                 timeout=self._timeout,
                 connector=connector,
