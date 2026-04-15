@@ -234,7 +234,7 @@ class NexusPipeline:
         self.telegram = TelegramReporter.get_instance()
         await self.telegram.initialize()
         if connected:
-            self.telegram.fire_startup(self.venue, balance)
+            self.telegram.fire_startup(self.venue, balance, dry_run=self.dry_run_mode)
 
     # ══════════════════════════════════════════════════════════════════
     #  Main Event Loop
@@ -495,13 +495,41 @@ class NexusPipeline:
                 result = await self.execution_engine.execute(trade_signal)
             except Exception as exc:
                 logger.error(f"Ejecución fallida: {exc}", exc_info=True)
-                self.telegram.fire_system_error(f"Ejecución fallida: {exc}", module="execution_engine")
+                self.telegram.fire_system_error(
+                    f"Ejecución fallida en {asset}: {exc}",
+                    module="execution_engine"
+                )
                 return
             latency = (time.perf_counter() - t_start) * 1000
+
+            # ── Activo suspendido: forzar rotación inmediata ───────────
+            if result.status == ExecutionStatus.ERROR:
+                err_msg = (result.error_message or "").lower()
+                if "suspended" in err_msg or "active is suspended" in err_msg:
+                    logger.warning(
+                        f"🚫 Activo {asset} SUSPENDIDO por IQ Option — "
+                        f"forzando rotación a siguiente activo."
+                    )
+                    if self.opportunity_agent:
+                        await self.opportunity_agent.invalidate_asset(asset)
+                    self.telegram.fire_system_error(
+                        f"Activo {asset} suspendido por IQ Option.\n"
+                        f"🔄 Rotando al siguiente activo disponible.",
+                        module="pipeline._tick"
+                    )
+                    self._last_trade_time = time.time()  # Aplicar cooldown para evitar loop
+                return  # Salir del tick — el próximo tick usará el activo rotado
 
         self._log_execution(result, trade_signal, latency)
 
         # ── Step 12: Post-Execution ──────────────────────────────────
+        if result.status == ExecutionStatus.ERROR:
+            # Cooldown corto tras error para no spamear el exchange
+            self._last_trade_time = time.time() - (
+                self._config.get("cooldown_between_trades_s", 300) - 60
+            )
+            return
+
         if result.status == ExecutionStatus.FILLED:
             self._daily_trades += 1
             self._last_trade_time = time.time()
@@ -538,21 +566,27 @@ class NexusPipeline:
                 )
                 self._position_manager.register_position(pos)
 
-            # Telegram: Trade Result alert (fire-and-forget)
-            try:
-                current_balance = await self.execution_engine.get_balance()
-            except Exception:
-                current_balance = 0.0
-            outcome = "WIN" if result.payout > 0 else "LOSS"
-            self.telegram.fire_trade_result(
-                asset=result.asset,
-                direction=result.direction.value,
-                size=result.size,
-                payout_pct=result.payout,
-                new_balance=current_balance,
-                outcome=outcome,
-                venue=self.venue,
-            )
+            # Telegram: Trade Result — esperar liquidación de IQ Option (~60s)
+            async def _delayed_result_notification(
+                _result=result, _direction=result.direction.value,
+                _size=result.size, _payout=result.payout, _venue=self.venue
+            ):
+                await asyncio.sleep(65)  # Esperar vencimiento de la opción binaria
+                try:
+                    final_balance = await self.execution_engine.get_balance()
+                except Exception:
+                    final_balance = 0.0
+                _outcome = "WIN" if _payout > 0 else "LOSS"
+                self.telegram.fire_trade_result(
+                    asset=_result.asset,
+                    direction=_direction,
+                    size=_size,
+                    payout_pct=_payout,
+                    new_balance=final_balance,
+                    outcome=_outcome,
+                    venue=_venue,
+                )
+            asyncio.create_task(_delayed_result_notification(), name="trade_result_notify")
 
         # ── Step 13: Observability (Prometheus) ──────────────────────
         if self.metrics:

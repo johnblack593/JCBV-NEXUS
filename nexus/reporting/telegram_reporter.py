@@ -311,15 +311,17 @@ class TelegramReporter:
         })
         self._weekly_equity.append(new_balance)
 
+        net_gain = size * payout_pct / 100.0 if outcome == "WIN" else 0.0
         msg = (
             f"{emoji} *RESULTADO*\n"
-            f"─────────────────\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
             f"🪙 *Activo:* `{asset}` | {direction}\n"
-            f"💰 *G/P:* `{pnl_str}`\n"
+            f"💵 *Invertido:* `${size:.2f}`\n"
+            f"💰 *Ganancia neta:* `+${net_gain:.2f}`\n"
             f"📊 *Payout:* `{payout_pct:.0f}%`\n"
             f"💼 *Balance:* `${new_balance:.2f}`\n"
-            f"📈 *G/P de sesión:* `{'+'if self._session_pnl>=0 else ''}${self._session_pnl:.2f}`\n"
-            f"─────────────────\n"
+            f"📈 *G/P sesión:* `{'+'if self._session_pnl>=0 else ''}${self._session_pnl:.2f}`\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
             f"⏱ {self._timestamp()}"
         )
         await self._send(msg)
@@ -334,12 +336,12 @@ class TelegramReporter:
 
     async def _send_system_error(self, error_msg: str, module: str) -> None:
         msg = (
-            f"🚨 *ERROR DEL SISTEMA*\n"
-            f"─────────────────\n"
+            f"🚨 *ALERTA DEL SISTEMA*\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
             f"📦 *Módulo:* `{module}`\n"
-            f"⚠️ *Error:* `{error_msg[:400]}`\n"
-            f"─────────────────\n"
-            f"⏱ {self._timestamp()}"
+            f"⚠️ *Error:* {error_msg[:400]}\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🕐 {self._timestamp()}"
         )
         await self._send_dev(msg)
 
@@ -419,19 +421,21 @@ class TelegramReporter:
     #  Startup / Shutdown Broadcasts
     # ══════════════════════════════════════════════════════════════════
 
-    def fire_startup(self, venue: str, balance: float) -> None:
+    def fire_startup(self, venue: str, balance: float, dry_run: bool = False) -> None:
         """Fire-and-forget: Pipeline started."""
-        self._fire(self._send_startup(venue, balance))
+        self._fire(self._send_startup(venue, balance, dry_run))
 
-    async def _send_startup(self, venue: str, balance: float) -> None:
+    async def _send_startup(self, venue: str, balance: float, dry_run: bool = False) -> None:
+        exec_mode = '🟡 SIMULACIÓN' if dry_run else '🟢 REAL'
         msg = (
             f"🚀 *NEXUS v5.0 EN LÍNEA*\n"
-            f"─────────────────\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
             f"🌐 *Exchange:* `{venue}`\n"
             f"💰 *Balance:* `${balance:.2f}`\n"
-            f"📊 *Modo:* `{'Sniper (1-3/día)' if venue == 'IQ_OPTION' else 'Institutional'}`\n"
+            f"📊 *Modo:* Sniper (1-3/día)\n"
+            f"🔴 *Ejecución:* {exec_mode}\n"
             f"🛡️ *Riesgo:* Circuit Breaker + Redis CB\n"
-            f"─────────────────\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
             f"⏱ {self._timestamp()}"
         )
         await self._send(msg)

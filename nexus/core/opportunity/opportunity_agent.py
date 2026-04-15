@@ -142,6 +142,15 @@ class OpportunityAgent:
         Read order: Redis → internal cache → None.
         Never calls the execution engine directly (read-only accessor).
         """
+        # Limpiar activos invalidados expirados
+        if hasattr(self, "_invalidated_assets"):
+            now = time.time()
+            self._invalidated_assets = {
+                k: v for k, v in self._invalidated_assets.items() if v > now
+            }
+            if self._best_asset in self._invalidated_assets:
+                self._best_asset = None
+
         # Try Redis first if available
         if self.redis_client is not None:
             try:
@@ -149,6 +158,9 @@ class OpportunityAgent:
                 if cached:
                     if isinstance(cached, bytes):
                         cached = cached.decode('utf-8')
+                    # Skip if invalidated
+                    if hasattr(self, "_invalidated_assets") and str(cached) in self._invalidated_assets:
+                        return self._last_best_asset
                     return str(cached)
             except Exception as exc:
                 logger.debug(f"Redis get failed: {exc}")
@@ -159,6 +171,24 @@ class OpportunityAgent:
             pass
             
         return self._last_best_asset
+
+    async def invalidate_asset(self, asset: str, ttl_seconds: int = 300) -> None:
+        """
+        Marca un activo como no disponible temporalmente (p.ej. suspendido).
+        El OpportunityAgent ignorará este activo en los próximos 'ttl_seconds'.
+        """
+        if not hasattr(self, "_invalidated_assets"):
+            self._invalidated_assets: dict = {}
+        self._invalidated_assets[asset] = time.time() + ttl_seconds
+        logger.warning(f"🚫 Activo invalidado temporalmente: {asset} ({ttl_seconds}s)")
+        # Si el activo inválido era el best_asset actual, limpiar caché
+        if self._last_best_asset == asset:
+            self._last_best_asset = None
+            if self.redis_client:
+                try:
+                    self.redis_client.delete(self.REDIS_KEY)
+                except Exception:
+                    pass
 
     async def _run_loop(self) -> None:
         """
