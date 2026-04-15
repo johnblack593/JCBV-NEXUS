@@ -234,7 +234,18 @@ class NexusPipeline:
         self.telegram = TelegramReporter.get_instance()
         await self.telegram.initialize()
         if connected:
-            self.telegram.fire_startup(self.venue, balance, dry_run=self.dry_run_mode)
+            # Build infrastructure report for startup notification
+            infra_report = self._build_infrastructure_report(
+                redis_host=os.getenv("REDIS_HOST", "localhost"),
+                redis_port=int(os.getenv("REDIS_PORT", "6379")),
+                redis_ok=self.redis_client is not None,
+                questdb_ok=dl_connected,
+            )
+            self.telegram.fire_startup(
+                self.venue, balance,
+                dry_run=self.dry_run_mode,
+                infrastructure_report=infra_report,
+            )
 
     # ══════════════════════════════════════════════════════════════════
     #  Main Event Loop
@@ -283,7 +294,20 @@ class NexusPipeline:
                 if best_asset:
                     payout = await self.execution_engine.get_payout(best_asset)
                     regime = await self.get_macro_regime()
-                    self.telegram.fire_market_briefing(regime.value, best_asset, payout)
+                    # Determine analysis mode and fear & greed for briefing
+                    analysis_mode = "Heurístico"
+                    fear_greed_score = None
+                    if self.macro_agent:
+                        if self.macro_agent._llm_provider and self.macro_agent._llm_provider != "UNKNOWN":
+                            analysis_mode = f"LLM: {self.macro_agent._llm_provider.capitalize()}"
+                        fg = self.macro_agent._last_fear_greed
+                        if fg and isinstance(fg, dict) and fg.get("score") is not None:
+                            fear_greed_score = fg["score"]
+                    self.telegram.fire_market_briefing(
+                        regime.value, best_asset, payout,
+                        analysis_mode=analysis_mode,
+                        fear_greed=fear_greed_score,
+                    )
             except Exception as exc:
                 logger.debug(f"No se pudo enviar briefing de mercado: {exc}")
 
@@ -489,6 +513,7 @@ class NexusPipeline:
                 venue=self.venue,
                 regime=regime.value,
                 reason=signal_result.get("reason", ""),
+                indicators=signal_result.get("indicators"),
             )
 
             try:
@@ -849,6 +874,91 @@ class NexusPipeline:
             return await self.execution_engine.get_balance()
         except Exception:
             return 20.0
+
+    def _build_infrastructure_report(
+        self,
+        redis_host: str = "localhost",
+        redis_port: int = 6379,
+        redis_ok: bool = False,
+        questdb_ok: bool = False,
+    ) -> Dict[str, Any]:
+        """Builds infrastructure status dict for Telegram startup notification."""
+        report: Dict[str, Any] = {}
+
+        # Redis
+        if redis_ok:
+            report["redis_status"] = f"OK:{redis_host}:{redis_port}"
+        else:
+            report["redis_status"] = "ERROR:no disponible"
+
+        # QuestDB
+        if questdb_ok:
+            report["questdb_status"] = "OK"
+        else:
+            report["questdb_status"] = "OFFLINE:persistencia de operaciones deshabilitada"
+
+        # LLM status from LLMRouter
+        llm_status = {}
+        try:
+            from nexus.core.llm.llm_router import LLMRouter
+            router = LLMRouter.get_instance()
+
+            # Groq keys
+            if router._groq_keys:
+                groq_hints = [k[:8] for k in router._groq_keys]
+                # Check if all keys are in cooldown or invalid
+                all_bad = all(
+                    router._get_key_hash(k) in router._cooldowns
+                    or router._get_key_hash(k) in router._invalid_keys
+                    for k in router._groq_keys
+                )
+                if all_bad:
+                    llm_status["Groq"] = {
+                        "status": "error",
+                        "keys_tried": groq_hints,
+                        "error_type": "Límite API",
+                    }
+                else:
+                    llm_status["Groq"] = {
+                        "status": "ok",
+                        "keys_tried": groq_hints,
+                        "error_type": "",
+                    }
+
+            # Gemini keys
+            if router._gemini_keys:
+                gemini_hints = [k[:8] for k in router._gemini_keys]
+                all_bad = all(
+                    router._get_key_hash(k) in router._cooldowns
+                    or router._get_key_hash(k) in router._invalid_keys
+                    for k in router._gemini_keys
+                )
+                if all_bad:
+                    llm_status["Gemini"] = {
+                        "status": "error",
+                        "keys_tried": gemini_hints,
+                        "error_type": "Límite API",
+                    }
+                else:
+                    llm_status["Gemini"] = {
+                        "status": "ok",
+                        "keys_tried": gemini_hints,
+                        "error_type": "",
+                    }
+        except Exception:
+            pass  # LLM router not available
+
+        report["llm_status"] = llm_status if llm_status else None
+
+        # MacroAgent
+        if self.macro_agent:
+            report["macro_interval"] = self.macro_agent.interval_hours
+            report["macro_provider"] = getattr(self.macro_agent, "_llm_provider", "UNKNOWN")
+        else:
+            report["macro_interval"] = ""
+            report["macro_provider"] = "UNKNOWN"
+
+        return report
 
     # ══════════════════════════════════════════════════════════════════
     #  Shutdown

@@ -165,19 +165,41 @@ class TelegramReporter:
     #  EVENT 1.5: MARKET BRIEFING
     # ══════════════════════════════════════════════════════════════════
 
-    def fire_market_briefing(self, macro_regime: str, best_asset: str, payout: float) -> None:
+    def fire_market_briefing(
+        self, macro_regime: str, best_asset: str, payout: float,
+        analysis_mode: str = "Heurístico",
+        fear_greed: Optional[int] = None,
+    ) -> None:
         """Fire-and-forget: Resumen del mercado inicial / escaneo dinámico."""
-        self._fire(self._send_market_briefing(macro_regime, best_asset, payout))
+        self._fire(self._send_market_briefing(
+            macro_regime, best_asset, payout, analysis_mode, fear_greed
+        ))
 
-    async def _send_market_briefing(self, macro_regime: str, best_asset: str, payout: float) -> None:
+    async def _send_market_briefing(
+        self, macro_regime: str, best_asset: str, payout: float,
+        analysis_mode: str, fear_greed: Optional[int],
+    ) -> None:
         regime_emoji = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴"}.get(macro_regime, "⚪")
+        # Fear & Greed label
+        if fear_greed is not None:
+            fg_labels = [
+                (25, "Miedo Extremo"), (45, "Miedo"), (55, "Neutral"),
+                (75, "Avaricia"), (101, "Avaricia Extrema"),
+            ]
+            fg_label = next((lbl for thr, lbl in fg_labels if fear_greed < thr), "Neutral")
+            fg_str = f"{fear_greed} — {fg_label}"
+        else:
+            fg_str = "No disponible"
+
         msg = (
-            f"📰 *NEXUS Briefing Matutino*\n"
-            f"─────────────────\n"
-            f"📊 *Macro:* {regime_emoji} `{macro_regime}`\n"
-            f"🏆 *Mejor Activo:* `{best_asset}`\n"
-            f"💰 *Payout:* `{payout:.1f}%`\n"
-            f"─────────────────\n"
+            f"📰 *NEXUS — Análisis de Mercado*\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🌍 *Macro:* {regime_emoji} {macro_regime}\n"
+            f"🏆 *Mejor activo:* {best_asset}\n"
+            f"💰 *Payout:* {payout:.1f}%\n"
+            f"🧠 *Modo de análisis:* {analysis_mode}\n"
+            f"📊 *Fear & Greed:* {fg_str}\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
             f"⏱ {self._timestamp()}"
         )
         await self._send(msg)
@@ -211,6 +233,22 @@ class TelegramReporter:
     #  EVENT 3: SNIPER ENTRY (Trade Executed)
     # ══════════════════════════════════════════════════════════════════
 
+    # Feature name mapping for human-readable sniper entry messages
+    _FEATURE_NAMES: Dict[str, str] = {
+        "log_returns": "Tendencia de precio",
+        "rsi": "Momento RSI",
+        "atr": "Volatilidad (ATR)",
+        "volume": "Volumen",
+        "macd": "MACD",
+        "bb_width": "Bandas Bollinger",
+    }
+    _FEATURE_ICONS: Dict[str, str] = {
+        "log_returns_CALL": "📈", "log_returns_PUT": "📉",
+        "log_returns_BUY": "📈", "log_returns_SELL": "📉",
+        "rsi": "🔄", "atr": "📊", "volume": "📦",
+        "macd": "🔀", "bb_width": "〰️",
+    }
+
     def fire_sniper_entry(
         self,
         asset: str,
@@ -220,10 +258,11 @@ class TelegramReporter:
         venue: str,
         regime: str = "GREEN",
         reason: str = "",
+        indicators: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Fire-and-forget: Trade ejecutado."""
         self._fire(self._send_sniper_entry(
-            asset, direction, size, confidence, venue, regime, reason
+            asset, direction, size, confidence, venue, regime, reason, indicators
         ))
 
     async def _send_sniper_entry(
@@ -235,31 +274,58 @@ class TelegramReporter:
         venue: str,
         regime: str,
         reason: str,
+        indicators: Optional[Dict[str, Any]] = None,
     ) -> None:
-        dir_emoji = {
-            "CALL": "🟢 CALL", "PUT": "🔴 PUT",
-            "BUY": "🟢 LONG", "SELL": "🔴 SHORT",
+        dir_label = {
+            "CALL": "🟢 COMPRA (CALL)", "PUT": "🔴 VENTA (PUT)",
+            "BUY": "🟢 COMPRA (LONG)", "SELL": "🔴 VENTA (SHORT)",
         }.get(direction, direction)
+
+        regime_emoji = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴"}.get(regime, "⚪")
+
+        # Confidence level text
+        conf_pct = int(confidence * 100) if confidence <= 1.0 else int(confidence)
+        if conf_pct >= 75:
+            conf_label = "Muy Alta"
+        elif conf_pct >= 60:
+            conf_label = "Alta"
+        else:
+            conf_label = "Moderada"
 
         mode = "[ENTRADA SNIPER]" if venue == "IQ_OPTION" else "[ENTRADA INSTITUCIONAL]"
 
         msg = (
             f"🎯 *{mode}*\n"
-            f"─────────────────\n"
-            f"🪙 *Activo:* `{asset}`\n"
-            f"🎯 *Dirección:* {dir_emoji}\n"
-            f"💵 *Monto:* `${size:.2f}`\n"
-            f"🤖 *Confianza:* `{confidence:.0%}`\n"
-            f"🌐 *Exchange:* `{venue}`\n"
-            f"📊 *Régimen:* `{regime}`\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🪙 *Activo:* {asset}\n"
+            f"🎯 *Dirección:* {dir_label}\n"
+            f"💵 *Monto:* ${size:.2f}\n"
+            f"🤖 *Confianza del modelo:* {conf_pct}% — {conf_label}\n"
+            f"🌐 *Exchange:* {venue}\n"
+            f"📊 *Régimen:* {regime_emoji} {regime}\n"
         )
-        if reason:
-            # Reemplazamos delimitadores comunes por saltos de línea para mostrar el breakdown en estilo lista
-            formatted_reason = reason.replace(' |', '\n  ▫️').replace(', ', '\n  ▫️')
-            if not formatted_reason.startswith('  ▫️'):
-                formatted_reason = f"  ▫️ {formatted_reason}"
-            msg += f"📋 *Detalle:*\n{formatted_reason}\n"
-        msg += f"─────────────────\n⏱ {self._timestamp()}"
+
+        # Feature importances section (human-readable)
+        importances = None
+        if indicators and isinstance(indicators, dict):
+            importances = indicators.get("feature_importances")
+        if importances and isinstance(importances, dict):
+            # Sort by importance, top 3
+            sorted_feats = sorted(importances.items(), key=lambda x: -x[1])[:3]
+            msg += f"━━━━━━━━━━━━━━━━━━━\n"
+            msg += f"📊 *Señales del análisis*\n"
+            for feat_name, feat_val in sorted_feats:
+                human_name = self._FEATURE_NAMES.get(feat_name, feat_name.upper())
+                # Icon lookup with direction awareness
+                icon_key = f"{feat_name}_{direction}" if feat_name == "log_returns" else feat_name
+                icon = self._FEATURE_ICONS.get(icon_key, "📊")
+                pct = int(feat_val * 100)
+                msg += f"  {icon} *{human_name}:* {pct}%\n"
+        elif reason:
+            msg += f"━━━━━━━━━━━━━━━━━━━\n"
+            msg += f"📋 *Detalle:* {reason}\n"
+
+        msg += f"━━━━━━━━━━━━━━━━━━━\n⏱ {self._timestamp()}"
 
         await self._send(msg)
 
@@ -292,14 +358,16 @@ class TelegramReporter:
         outcome: str,
         venue: str,
     ) -> None:
+        # Direction label in Spanish
+        dir_label = {
+            "CALL": "🟢 COMPRA", "PUT": "🔴 VENTA",
+            "BUY": "🟢 COMPRA", "SELL": "🔴 VENTA",
+        }.get(direction, direction)
+
         if outcome == "WIN":
             pnl = size * (payout_pct / 100.0)
-            emoji = "✅"
-            pnl_str = f"+${pnl:.2f}"
         else:
             pnl = -size
-            emoji = "❌"
-            pnl_str = f"-${size:.2f}"
 
         self._session_pnl += pnl
 
@@ -311,16 +379,36 @@ class TelegramReporter:
         })
         self._weekly_equity.append(new_balance)
 
-        net_gain = size * payout_pct / 100.0 if outcome == "WIN" else 0.0
+        if outcome == "WIN":
+            net_gain = size * payout_pct / 100.0
+            header = "✅ *OPERACIÓN GANADORA*"
+            pnl_line = f"🏆 *Ganancia neta:* +${net_gain:.2f}"
+            payout_line = f"📊 *Payout:* {payout_pct:.0f}%\n"
+            if self._session_pnl >= 0:
+                session_line = f"📈 *Ganancia de sesión:* +${self._session_pnl:.2f}"
+            else:
+                session_line = f"📉 *Pérdida de sesión:* -${abs(self._session_pnl):.2f}"
+        else:
+            header = "❌ *OPERACIÓN PERDEDORA*"
+            pnl_line = f"💸 *Pérdida:* -${size:.2f}"
+            payout_line = ""
+            if self._session_pnl >= 0:
+                session_line = f"📈 *Ganancia de sesión:* +${self._session_pnl:.2f}"
+            else:
+                session_line = f"📉 *Pérdida de sesión:* -${abs(self._session_pnl):.2f}"
+
         msg = (
-            f"{emoji} *RESULTADO*\n"
+            f"{header}\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
-            f"🪙 *Activo:* `{asset}` | {direction}\n"
-            f"💵 *Invertido:* `${size:.2f}`\n"
-            f"💰 *Ganancia neta:* `+${net_gain:.2f}`\n"
-            f"📊 *Payout:* `{payout_pct:.0f}%`\n"
-            f"💼 *Balance:* `${new_balance:.2f}`\n"
-            f"📈 *G/P sesión:* `{'+'if self._session_pnl>=0 else ''}${self._session_pnl:.2f}`\n"
+            f"🪙 *Activo:* {asset} | {dir_label}\n"
+            f"💵 *Invertido:* ${size:.2f}\n"
+            f"{pnl_line}\n"
+        )
+        if payout_line:
+            msg += payout_line
+        msg += (
+            f"💼 *Balance:* ${new_balance:.2f}\n"
+            f"{session_line}\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"⏱ {self._timestamp()}"
         )
@@ -338,7 +426,7 @@ class TelegramReporter:
         msg = (
             f"🚨 *ALERTA DEL SISTEMA*\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
-            f"📦 *Módulo:* `{module}`\n"
+            f"📦 *Módulo:* {module}\n"
             f"⚠️ *Error:* {error_msg[:400]}\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"🕐 {self._timestamp()}"
@@ -421,23 +509,92 @@ class TelegramReporter:
     #  Startup / Shutdown Broadcasts
     # ══════════════════════════════════════════════════════════════════
 
-    def fire_startup(self, venue: str, balance: float, dry_run: bool = False) -> None:
-        """Fire-and-forget: Pipeline started."""
-        self._fire(self._send_startup(venue, balance, dry_run))
+    def fire_startup(
+        self, venue: str, balance: float,
+        dry_run: bool = False,
+        infrastructure_report: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Fire-and-forget: Pipeline started with infrastructure diagnostics."""
+        self._fire(self._send_startup(venue, balance, dry_run, infrastructure_report))
 
-    async def _send_startup(self, venue: str, balance: float, dry_run: bool = False) -> None:
-        exec_mode = '🟡 SIMULACIÓN' if dry_run else '🟢 REAL'
+    async def _send_startup(
+        self, venue: str, balance: float,
+        dry_run: bool = False,
+        infrastructure_report: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        # FIX 6: Icon matches mode — no duplicate/wrong icon
+        if dry_run:
+            exec_line = "🟡 *Ejecución:* SIMULACIÓN"
+        else:
+            exec_line = "🟢 *Ejecución:* REAL"
+
         msg = (
             f"🚀 *NEXUS v5.0 EN LÍNEA*\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
-            f"🌐 *Exchange:* `{venue}`\n"
-            f"💰 *Balance:* `${balance:.2f}`\n"
+            f"🌐 *Exchange:* {venue}\n"
+            f"💰 *Balance:* ${balance:.2f}\n"
             f"📊 *Modo:* Sniper (1-3/día)\n"
-            f"🔴 *Ejecución:* {exec_mode}\n"
-            f"🛡️ *Riesgo:* Circuit Breaker + Redis CB\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
-            f"⏱ {self._timestamp()}"
+            f"{exec_line}\n"
         )
+
+        if infrastructure_report is not None:
+            ir = infrastructure_report
+            msg += f"━━━━━━━━━━━━━━━━━━━\n"
+            msg += f"🔧 *Estado de Infraestructura*\n"
+
+            # Redis
+            redis_st = ir.get("redis_status", "")
+            if redis_st.startswith("OK"):
+                redis_detail = redis_st.replace("OK:", "").strip() or "conectado"
+                msg += f"  ✅ Redis: {redis_detail}\n"
+            else:
+                redis_err = redis_st.replace("ERROR:", "").strip() or "no disponible"
+                msg += f"  ❌ Redis: {redis_err}\n"
+
+            # QuestDB
+            qdb_st = ir.get("questdb_status", "")
+            if qdb_st.startswith("OK"):
+                msg += f"  ✅ QuestDB: conectado\n"
+            else:
+                qdb_err = qdb_st.replace("OFFLINE:", "").strip() or "offline"
+                msg += f"  ⚠️ QuestDB: OFFLINE — {qdb_err}\n"
+
+            # Telegram (we're sending this, so it's connected)
+            msg += f"  ✅ Telegram: conectado\n"
+
+            # LLM status
+            llm_status = ir.get("llm_status")
+            if llm_status and isinstance(llm_status, dict):
+                msg += f"━━━━━━━━━━━━━━━━━━━\n"
+                msg += f"🤖 *Estado de LLMs*\n"
+                any_ok = False
+                for provider, info in llm_status.items():
+                    if not isinstance(info, dict):
+                        continue
+                    status = info.get("status", "error")
+                    keys_tried = info.get("keys_tried", [])
+                    error_type = info.get("error_type", "")
+                    keys_str = ", ".join(keys_tried) if keys_tried else "ninguna"
+                    if status == "ok":
+                        any_ok = True
+                        msg += f"  ✅ {provider}: conectado — claves: {keys_str}\n"
+                    else:
+                        diag = self._classify_llm_error(error_type)
+                        msg += f"  ❌ {provider} ({len(keys_tried)} claves): {diag}\n"
+                if not any_ok:
+                    msg += f"  🔄 Modo activo: Heurístico\n"
+
+            # MacroAgent info
+            macro_interval = ir.get("macro_interval", "")
+            macro_provider = ir.get("macro_provider", "UNKNOWN")
+            if macro_interval:
+                msg += f"━━━━━━━━━━━━━━━━━━━\n"
+                msg += f"🌐 *MacroAgent:* intervalo {macro_interval}h | proveedor: {macro_provider}\n"
+        else:
+            msg += f"🛡️ *Riesgo:* Circuit Breaker + Redis CB\n"
+
+        msg += f"━━━━━━━━━━━━━━━━━━━\n"
+        msg += f"⏱ {self._timestamp()}"
         await self._send(msg)
 
     def fire_shutdown(self, stats: Dict[str, Any]) -> None:
@@ -528,17 +685,81 @@ class TelegramReporter:
                 logger.warning(f"Telegram dev send failed: {exc}")
 
     def fire_llm_fallback(self, provider: str, reason: str) -> None:
-        """Fire-and-forget DEV: todos los LLM fallaron, sin análisis."""
+        """Fire-and-forget DEV: todos los LLM fallaron (legacy)."""
         self._fire(self._send_dev_llm_fallback(provider, reason))
 
     async def _send_dev_llm_fallback(self, provider: str, reason: str) -> None:
+        # Classify the error for better diagnostics
+        error_diag = self._classify_llm_error(reason)
         msg = (
-            f"🤖 *LLM SIN RESPUESTA*\n"
-            f"─────────────────\n"
-            f"📦 *Proveedor:* `{provider}`\n"
-            f"⚠️ *Motivo:* `{reason[:200]}`\n"
-            f"🔄 *Acción:* Análisis macro en modo heurístico.\n"
-            f"─────────────────\n"
+            f"🤖 *LLM — Sin Respuesta*\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 *Proveedor:* {provider}\n"
+            f"⚠️ *Diagnóstico:* {error_diag}\n"
+            f"🔄 *Acción tomada:* Análisis macro en modo heurístico\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"⏱ {self._timestamp()}"
+        )
+        await self._send_dev(msg)
+
+    def fire_llm_unavailable(
+        self,
+        providers_tried: Optional[List[Dict[str, Any]]] = None,
+        action_taken: str = "Análisis macro en modo heurístico",
+    ) -> None:
+        """Fire-and-forget: LLM unavailable with detailed provider diagnostics."""
+        self._fire(self._send_llm_unavailable(providers_tried, action_taken))
+
+    async def _send_llm_unavailable(
+        self,
+        providers_tried: Optional[List[Dict[str, Any]]],
+        action_taken: str,
+    ) -> None:
+        msg = (
+            f"🤖 *LLM — Sin Respuesta*\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+        )
+
+        primary_error_type = ""
+        if providers_tried:
+            msg += f"📦 *Proveedores intentados:*\n"
+            for prov in providers_tried:
+                name = prov.get("name", "Desconocido")
+                keys_count = prov.get("keys_count", 0)
+                error_type = prov.get("error_type", "")
+                diag = self._classify_llm_error(error_type)
+                msg += f"  ❌ {name} ({keys_count} claves): {diag}\n"
+                if not primary_error_type:
+                    primary_error_type = error_type
+        else:
+            msg += f"📦 *Proveedores:* Ninguno configurado\n"
+
+        # Diagnostic recommendations based on error type
+        normalized = primary_error_type.lower() if primary_error_type else ""
+        if "dns" in normalized or "could not contact dns" in normalized:
+            msg += (
+                f"⚠️ *Diagnóstico:* Error de red — no se puede contactar los servidores DNS\n"
+                f"  → Verificar: conexión a internet del servidor, firewall, VPN/proxy\n"
+            )
+        elif "timeout" in normalized:
+            msg += (
+                f"⚠️ *Diagnóstico:* Tiempo de espera agotado\n"
+                f"  → Verificar: latencia de red, estado del proveedor\n"
+            )
+        elif "rate_limit" in normalized or "429" in normalized:
+            msg += (
+                f"⚠️ *Diagnóstico:* Límite de solicitudes alcanzado\n"
+                f"  → Acción sugerida: rotar a las claves de respaldo o esperar renovación\n"
+            )
+        elif "401" in normalized or "invalid_api_key" in normalized:
+            msg += (
+                f"⚠️ *Diagnóstico:* Clave API inválida\n"
+                f"  → Verificar: claves API configuradas en .env\n"
+            )
+
+        msg += (
+            f"🔄 *Acción tomada:* {action_taken}\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
             f"⏱ {self._timestamp()}"
         )
         await self._send_dev(msg)
@@ -596,6 +817,27 @@ class TelegramReporter:
         buf.seek(0)
         plt.close(fig)
         return buf.read()
+
+    @staticmethod
+    def _classify_llm_error(error_info: str) -> str:
+        """
+        Clasifica un error de LLM en una categoría legible para humanos.
+        Usado por fire_startup, fire_llm_fallback, y fire_llm_unavailable.
+        """
+        if not error_info:
+            return "Error desconocido"
+        lower = error_info.lower()
+        if "could not contact dns" in lower or "dns" in lower:
+            return "Sin conexión DNS"
+        elif "timeout" in lower:
+            return "Tiempo de espera agotado"
+        elif "rate_limit" in lower or "429" in lower or "quota" in lower or "exhausted" in lower:
+            return "Límite de solicitudes alcanzado"
+        elif "401" in lower or "invalid_api_key" in lower or "unauthorized" in lower:
+            return "Clave API inválida"
+        else:
+            # Show first 80 chars of raw error
+            return error_info[:80]
 
     @staticmethod
     def _timestamp() -> str:
