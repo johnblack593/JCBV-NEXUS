@@ -54,6 +54,7 @@ from .strategies.base import BaseStrategy
 from .strategies.binary_ml_exotic import BinaryMLExoticStrategy
 from .strategies.bitget_trend_scalper import BitgetTrendScalperStrategy
 from nexus.reporting.telegram_reporter import TelegramReporter
+from nexus.storage.local_journal import LocalJournal
 
 logger = logging.getLogger("nexus.pipeline")
 
@@ -146,6 +147,7 @@ class NexusPipeline:
         self._position_manager: Optional[PositionManager] = None
         self.metrics: Optional[NexusMetrics] = None
         self.telegram: Optional[TelegramReporter] = None
+        self.journal: Optional[LocalJournal] = None
 
         # Session tracking
         self._running = False
@@ -230,9 +232,30 @@ class NexusPipeline:
         self.metrics = NexusMetrics(port=9090)
         self.metrics.start_server()
 
+        # ── Local Journal: persistencia cuando QuestDB está offline ────
+        self.journal = LocalJournal()
+        prev_state = self.journal.load_session_state()
+        if prev_state.get("trades_today", 0) > 0:
+            logger.info(
+                "📂 Estado de sesión restaurado: %d trades, P&L $%.2f",
+                prev_state["trades_today"], prev_state["session_pnl"]
+            )
+
         # ── Telegram: Institutional Voice ─────────────────────────────
         self.telegram = TelegramReporter.get_instance()
         await self.telegram.initialize()
+
+        # Restaurar estado de sesión en TelegramReporter
+        if prev_state.get("trades_today", 0) > 0:
+            self.telegram._session_pnl = prev_state.get("session_pnl", 0.0)
+            weekly_trades = self.journal.get_weekly_trades()
+            weekly_equity = self.journal.get_weekly_equity()
+            if weekly_trades:
+                self.telegram._weekly_trades = weekly_trades
+            if weekly_equity:
+                self.telegram._weekly_equity = weekly_equity
+            self._daily_trades = prev_state.get("trades_today", 0)
+
         if connected:
             # Build infrastructure report for startup notification
             infra_report = await self._build_infrastructure_report(
@@ -594,7 +617,8 @@ class NexusPipeline:
             # Telegram: Trade Result — esperar liquidación de IQ Option (~60s)
             async def _delayed_result_notification(
                 _result=result, _direction=result.direction.value,
-                _size=result.size, _payout=result.payout, _venue=self.venue
+                _size=result.size, _payout=result.payout, _venue=self.venue,
+                _asset=asset,
             ):
                 await asyncio.sleep(65)  # Esperar vencimiento de la opción binaria
                 try:
@@ -602,6 +626,8 @@ class NexusPipeline:
                 except Exception:
                     final_balance = 0.0
                 _outcome = "WIN" if _payout > 0 else "LOSS"
+                _pnl = _size * (_payout / 100.0) if _outcome == "WIN" else -_size
+
                 self.telegram.fire_trade_result(
                     asset=_result.asset,
                     direction=_direction,
@@ -611,6 +637,27 @@ class NexusPipeline:
                     outcome=_outcome,
                     venue=_venue,
                 )
+
+                # Persist to local journal
+                if self.journal:
+                    self.journal.log_trade({
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "asset": _asset,
+                        "direction": _direction,
+                        "size": _size,
+                        "payout_pct": _payout,
+                        "outcome": _outcome,
+                        "pnl": round(_pnl, 4),
+                        "balance": round(final_balance, 2),
+                        "venue": _venue,
+                    })
+                    self.journal.log_equity(final_balance)
+                    self.journal.save_session_state(
+                        session_pnl=self.telegram._session_pnl,
+                        trades_today=self._daily_trades,
+                        balance=final_balance,
+                    )
+
             asyncio.create_task(_delayed_result_notification(), name="trade_result_notify")
 
         # ── Step 13: Observability (Prometheus) ──────────────────────
@@ -942,6 +989,17 @@ class NexusPipeline:
         else:
             report["macro_interval"] = ""
             report["macro_provider"] = "UNKNOWN"
+
+        # Local Journal
+        if self.journal:
+            report["journal_status"] = self.journal.get_status()
+            prev = self.journal.load_session_state()
+            report["journal_trades"] = self.journal.get_trade_count()
+            report["journal_session_pnl"] = prev.get("session_pnl", 0.0)
+        else:
+            report["journal_status"] = "ERROR:no inicializado"
+            report["journal_trades"] = 0
+            report["journal_session_pnl"] = 0.0
 
         return report
 

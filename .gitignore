@@ -21,6 +21,7 @@ env/
 nexus/logs/
 nexus/reports/
 nexus/data/
+data/journal/
 
 # ML model artifacts (too large for git; use git-lfs or object storage)
 nexus/models/

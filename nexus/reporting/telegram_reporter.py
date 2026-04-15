@@ -562,6 +562,19 @@ class TelegramReporter:
             # Telegram (we're sending this, so it's connected)
             msg += f"  ✅ Telegram: conectado\n"
 
+            # Local Journal
+            journal_st = ir.get("journal_status", "")
+            jnl_trades = ir.get("journal_trades", 0)
+            jnl_pnl = ir.get("journal_session_pnl", 0.0)
+            if journal_st.startswith("OK"):
+                if jnl_trades > 0:
+                    msg += f"  ✅ Journal local: {jnl_trades} trades previos | P&L sesión ${jnl_pnl:.2f}\n"
+                else:
+                    msg += f"  ✅ Journal local: sin trades previos\n"
+            elif journal_st:
+                jnl_err = journal_st.replace("ERROR:", "").strip() or "error"
+                msg += f"  ❌ Journal local: {jnl_err}\n"
+
             # LLM status
             llm_status = ir.get("llm_status")
             if llm_status and isinstance(llm_status, dict):
