@@ -347,6 +347,31 @@ class NexusPipeline:
                     best_match = await self.execution_engine.get_best_available_asset(min_payout)
                     if best_match:
                         best_asset = best_match["symbol"]
+                        
+                # ── ALERTA DE ARRANQUE EN REAL (Cuentas activas con dinero real) ──
+                if not self.dry_run_mode:
+                    bal = await self.execution_engine.get_balance()
+                    max_tr = int(os.getenv("MAX_TRADES_PER_SESSION", "5"))
+                    max_loss = float(os.getenv("MAX_LOSS_PER_SESSION", "3.00"))
+                    
+                    llm_prov = getattr(self.macro_agent, "_llm_provider", "UNKNOWN") if self.macro_agent else "UNKNOWN"
+                    msg_llm = f"Groq ✅ / Gemini ⚠️" if "groq" in llm_prov.lower() else f"Modo Heurístico"
+                    cb_state = "OPEN ❌" if self.risk_manager and self.risk_manager.is_circuit_breaker_active() else "CLOSED ✅"
+
+                    msg_real = (
+                        f"🔴 *NEXUS ARRANCANDO EN CUENTA REAL*\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"💰 *Balance inicial:* ${bal:.2f}\n"
+                        f"🎯 *Límite sesión:* {max_tr} trades / max pérdida ${max_loss:.2f}\n"
+                        f"🤖 *LLM:* {msg_llm}\n"
+                        f"⚡ *Circuit Breaker:* {cb_state}\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"Iniciando operaciones en 30 segundos..."
+                    )
+                    await self.telegram._send(msg_real)
+                    logger.critical("Arrancando en MODO REAL. Esperando 30 segundos para permitir abortar (Ctrl+C)...")
+                    await asyncio.sleep(30)
+                    
                 if best_asset:
                     payout = await self.execution_engine.get_payout(best_asset)
                     regime = await self.get_macro_regime()
@@ -425,9 +450,28 @@ class NexusPipeline:
             logger.warning("🔴 RÉGIMEN MACRO ROJO — Sin nuevas operaciones.")
             return
 
-        # ── Step 2: Check daily trade limit ──────────────────────────
+        # ── Step 2: Check Session Limits (REAL ACCOUNT PROTECTION) ──
+        max_session_trades = int(os.getenv("MAX_TRADES_PER_SESSION", "5"))
+        max_session_loss = float(os.getenv("MAX_LOSS_PER_SESSION", "3.00"))
+        
+        if self._daily_trades >= max_session_trades:
+            msg = f"⛔ Límite de sesión alcanzado: {self._daily_trades} operaciones ejecutadas. Cerrando."
+            logger.warning(msg)
+            self.telegram.fire_system_error(msg, module="pipeline._tick")
+            self._running = False
+            return
+            
+        current_loss = -self.telegram._session_pnl if self.telegram._session_pnl < 0 else 0.0
+        if current_loss >= max_session_loss:
+            msg = f"⛔ Stop de pérdida diaria: -${current_loss:.2f} alcanzado. Cerrando."
+            logger.warning(msg)
+            self.telegram.fire_system_error(msg, module="pipeline._tick")
+            self._running = False
+            return
+
+        # Legacy check fallback
         max_daily = self._config.get("max_daily_trades", 3)
-        if self._daily_trades >= max_daily:
+        if self._daily_trades >= max_daily and max_daily > max_session_trades:
             logger.info(
                 f"📊 Límite diario alcanzado ({self._daily_trades}/{max_daily})"
             )

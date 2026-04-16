@@ -408,6 +408,39 @@ class QuantRiskManager:
             return False
         return True
 
+    def safe_reset(self, reason: str = "manual") -> None:
+        """
+        Resetea el CB a CLOSED (desactivado) solo si han pasado más de 24h
+        desde que se abrió, o si reason='manual'.
+        Loguea el reset con timestamp y razón.
+        """
+        if not self._circuit_breaker_active:
+            logger.info("safe_reset ignorado: el circuit breaker ya está desactivado.")
+            return
+
+        time_since_activation = self.CIRCUIT_BREAKER_COOLDOWN - (self._circuit_breaker_until - time.time())
+        
+        if reason == "manual" or time_since_activation > 86400:
+            self._circuit_breaker_active = False
+            self._circuit_breaker_until = 0.0
+            self._clear_cb_state()
+            
+            log_path = self._log_dir / "circuit_breaker.log"
+            now = datetime.now(timezone.utc).isoformat()
+            log_entry = f"[{now}] CIRCUIT BREAKER RESET | reason={reason} | time_open={time_since_activation:.0f}s\n"
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(log_entry)
+            except OSError:
+                pass
+            
+            logger.critical("CIRCUIT BREAKER RESETEADO. Sistema desbloqueado (Razón: %s)", reason)
+        else:
+            logger.warning(
+                "safe_reset bloqueado: menos de 24h desde activación y reason!=manual "
+                "(%.0f seg transcurridos)", time_since_activation
+            )
+
     # ── Persistencia Dual del Circuit Breaker (Redis + Disco) ──────────
 
     _REDIS_CB_KEY = "NEXUS:CIRCUIT_BREAKER"
