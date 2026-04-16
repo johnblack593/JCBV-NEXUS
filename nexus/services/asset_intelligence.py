@@ -71,6 +71,9 @@ class AssetIntelligenceService:
             return {}
 
     def is_available_by_schedule(self, symbol: str, at: datetime = None) -> AssetStatus:
+        if symbol.endswith('-OTC') or symbol.endswith('-OTC-op') or '-OTC' in symbol.upper():
+            return AssetStatus.AVAILABLE
+
         if not self._schedule or 'assets' not in self._schedule:
             return AssetStatus.UNKNOWN
             

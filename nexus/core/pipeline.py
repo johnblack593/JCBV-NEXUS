@@ -614,11 +614,41 @@ class NexusPipeline:
             f"watchlist={wl_str}"
         )
 
-        # Umbrales dinámicos idénticos al Step 7
-        _ce_min_conf = float(os.getenv(
-            "MIN_CONFIDENCE_YELLOW" if macro_regime_str == "YELLOW"
-            else "MIN_CONFIDENCE_GREEN", "0.62" if macro_regime_str == "YELLOW" else "0.55"
-        ))
+        # Umbrales dinámicos (REDUCCIÓN TEMPORAL PARA VALIDACIÓN END-TO-END)
+        # TODO: revertir a os.getenv cuando el primer trade pase con éxito.
+        _ce_min_conf = 0.50
+        min_payout_target = 75.0
+        logger.warning(
+            "⚠️ MODO VALIDACIÓN: umbrales reducidos "
+            "(conf=0.50, payout=75%) — REVERTIR ANTES DE PRODUCCIÓN"
+        )
+
+        real_payouts = {}
+        try:
+            # Intentar obtener de API
+            if hasattr(self.execution_engine, "get_all_profit"):
+                profit_data = await self.execution_engine.get_all_profit()
+                for symbol in eval_watchlist:
+                    sym_clean = symbol.replace('-op', '').replace('_', '').upper()
+                    # A veces IQ retorna list of dicts o dicts
+                    val = profit_data.get(sym_clean, profit_data.get(symbol, {}))
+                    if isinstance(val, dict):
+                        val = val.get('turbo', val.get('binary', 0.80))
+                    elif isinstance(val, (int, float)):
+                        pass
+                    else:
+                        val = 0.80
+                        
+                    payout_val = float(val) if val > 1.0 else float(val) * 100.0
+                    real_payouts[symbol] = payout_val
+                    
+            # Si OpportunityAgent tiene algo fresco, prevalece para el best_asset
+            if agent_symbol and hasattr(self.opportunity_agent, "_last_best_asset") and self.opportunity_agent._last_best_asset == agent_symbol:
+                if hasattr(self.opportunity_agent, "best_stats") and "payout" in self.opportunity_agent.best_stats:
+                    real_payouts[agent_symbol] = self.opportunity_agent.best_stats["payout"]
+                
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudo obtener payouts reales: {e} — usando fallback")
 
         async def _get_data_for_consensus(symbol: str):
             """Wrapper para obtener datos de mercado por símbolo."""
@@ -635,8 +665,9 @@ class NexusPipeline:
             watchlist=eval_watchlist,
             get_data_fn=_get_data_for_consensus,
             analyze_fn=self.strategy.analyze,
+            real_payouts=real_payouts,
             min_conf=_ce_min_conf,
-            min_payout=float(self._config.get("min_payout", 80)),
+            min_payout=min_payout_target,
             atr_floor=float(os.getenv("ATR_FLOOR", "0.00005")),
         )
 
