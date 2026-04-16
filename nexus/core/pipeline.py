@@ -391,8 +391,15 @@ class NexusPipeline:
                         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
                         f"Iniciando operaciones en 30 segundos..."
                     )
+                    
+                    account_type = os.getenv("IQ_OPTION_ACCOUNT_TYPE", "PRACTICE").upper()
+                    if account_type == "PRACTICE":
+                        warning_msg = "⚠️  DRY_RUN=False pero cuenta es PRACTICE — operando en demo con órdenes reales"
+                        logger.warning(warning_msg)
+                        msg_real = msg_real.replace("CUENTA REAL", "CUENTA PRACTICE (REAL MODO)")
+                    
                     await self.telegram._send(msg_real)
-                    logger.critical("Arrancando en MODO REAL. Esperando 30 segundos para permitir abortar (Ctrl+C)...")
+                    logger.critical(f"Arrancando en MODO {account_type}. Esperando 30 segundos para permitir abortar (Ctrl+C)...")
                     await asyncio.sleep(30)
                     
                 if best_asset:
@@ -417,7 +424,9 @@ class NexusPipeline:
 
         while self._running:
             try:
-                await self._tick()
+                await asyncio.wait_for(self._tick(), timeout=45.0)
+            except asyncio.TimeoutError:
+                logger.warning("⚠️ _tick() timeout_global cancelado (superó 45s). Avanzando al siguiente ciclo.")
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -564,9 +573,10 @@ class NexusPipeline:
         async def _get_data_for_consensus(symbol: str):
             """Wrapper para obtener datos de mercado por símbolo."""
             try:
-                self._config["asset"] = symbol
-                _, df = await self._get_market_data()
-                return df
+                df = await self.execution_engine.get_historical_data(symbol, "1m", 500)
+                if df is not None and len(df) >= 30:
+                    return df
+                return None
             except Exception:
                 return None
 
@@ -610,10 +620,10 @@ class NexusPipeline:
         else:
             active_symbol = base_asset
             
-        # Forzar el activo configurado para que _get_market_data() use el correcto
+        # Forzar el activo configurado para que el resto use el correcto
         self._config["asset"] = active_symbol
 
-        asset, df = await self._get_market_data()
+        asset, df = await self._get_market_data(active_symbol, watchlist)
         if df is None or df.empty or len(df) < 30:
             return  # Datos insuficientes
 
@@ -907,34 +917,47 @@ class NexusPipeline:
     #  Market Data Acquisition
     # ══════════════════════════════════════════════════════════════════
 
-    async def _get_market_data(self) -> Tuple[Optional[str], Any]:
+    async def _get_market_data(self, requested_asset: str, watchlist: list[str]) -> Tuple[Optional[str], Any]:
         """
-        Retrieves the pre-selected best asset from OpportunityAgent
-        (Redis cache) and fetches its OHLCV data.
-
-        The asset selection is performed by OpportunityAgent in the
-        background — this method never calls get_best_available_asset()
-        or get_all_profit() directly.
+        Descarga paralela de velas en N timeframes (1m, 5m, 15m, 30m, 1h).
+        Si el activo principal falla en >2 timeframes por timeout, cambia al siguiente.
         """
         import pandas as pd
-
-        # Read pre-selected asset from OpportunityAgent
-        asset = None
-        if self.opportunity_agent:
-            asset = await self.opportunity_agent.get_best_asset()
-
-        if not asset:
-            logger.debug("Sin activo disponible del AgenteOportunidad. Omitiendo tick.")
-            return None, pd.DataFrame()
-
-        # Fetch OHLCV — only network call in the tick path
-        try:
-            df = await self.execution_engine.get_historical_data(asset, "1m", 500)
-            if df is not None and len(df) >= 30:
-                return asset, df
-        except Exception as exc:
-            logger.debug(f"Fallo al obtener datos de {asset}: {exc}")
-
+        
+        timeframes = ["1m", "5m", "15m", "30m", "1h"]
+        current_asset = requested_asset
+        
+        for asset_candidate in [current_asset] + [a for a in watchlist if a != current_asset]:
+            tasks = [
+                self.execution_engine.get_historical_data(asset_candidate, tf, 500)
+                for tf in timeframes
+            ]
+            
+            # Descarga PARALELA
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            valid_dfs = {}
+            timeout_count = 0
+            
+            for tf, res in zip(timeframes, results):
+                if isinstance(res, Exception) or res is None or len(res) < 30:
+                    timeout_count += 1
+                else:
+                    valid_dfs[tf] = res
+                    
+            if timeout_count > 2:
+                logger.warning(f"⚠️ [{asset_candidate}] timeout en {timeout_count}/5 TFs — switch a NEXT_SYMBOL")
+                continue # Probar con el siguiente
+                
+            # Todo fue exitoso o fallaron <= 2
+            # El pipeline maneja los faltantes omitiéndolos lógicamente (se usa '1m' principal)
+            primary_df = valid_dfs.get("1m")
+            if primary_df is not None:
+                if asset_candidate != requested_asset:
+                    self._config["asset"] = asset_candidate
+                return asset_candidate, primary_df
+                
+        logger.debug("Ningún activo pudo proporcionar suficientes datos históricos.")
         return None, pd.DataFrame()
 
     # ══════════════════════════════════════════════════════════════════

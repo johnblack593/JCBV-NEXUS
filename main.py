@@ -179,6 +179,9 @@ async def run() -> None:
     global logger
     logger = logging.getLogger("nexus.main")
 
+    # Reset session trade counter
+    os.environ["SESSION_TRADE_COUNTER"] = "0"
+    
     pipeline = NexusPipeline()
 
     # ── Graceful Shutdown Handler ─────────────────────────────────

@@ -302,6 +302,85 @@ class OpportunityAgent:
             best_stats = {}
 
             # 3. Process top candidates
+            candidate_data = []
+
+            # First pass: gather data to compute atr_reference
+            for asset, payout in top_candidates:
+                try:
+                    clean = asset.replace("-op", "").replace("_", "").upper()
+                    df = await self.execution_engine.get_historical_data(clean, "1m", 30)
+                    if df is None or len(df) < 15:
+                        continue
+                        
+                    atr = _compute_atr(df, period=14)
+                    if atr < self.atr_floor:
+                        continue
+                        
+                    closes = df["close"].values
+                    volumes = df["volume"].values
+                    
+                    if len(closes) >= 5:
+                        momentum_raw = abs(closes[-1] - closes[-5]) / (closes[-5] + 1e-9)
+                        momentum_norm = min(momentum_raw / 0.02, 1.0)
+                    else:
+                        momentum_norm = 0.0
+                        
+                    if len(volumes) >= 10:
+                        vol_std = volumes[-10:].std()
+                        vol_mean = volumes[-10:].mean()
+                        liquidity_norm = 1.0 - (vol_std / (vol_mean + 1e-9))
+                        liquidity_norm = max(0.0, min(liquidity_norm, 1.0))
+                    else:
+                        liquidity_norm = 0.5
+                        
+                    candidate_data.append({
+                        "asset": asset,
+                        "payout": payout,
+                        "atr": atr,
+                        "momentum_norm": momentum_norm,
+                        "liquidity_norm": liquidity_norm
+                    })
+                except Exception as cand_exc:
+                    logger.debug(f"Eval err for {asset}: {cand_exc}")
+                    continue
+
+            if not candidate_data:
+                logger.warning(f"⚠️ No asset passed filters. Keeping previous: {self._last_best_asset}")
+                return self._last_best_asset
+
+            import numpy as np
+            atrs = [d["atr"] for d in candidate_data]
+            atr_reference = np.percentile(atrs, 75) if atrs else 1.0
+            if atr_reference == 0:
+                atr_reference = 1e-9
+
+            # Second pass: Compute scores with multicriteria formula
+            for d in candidate_data:
+                asset = d["asset"]
+                payout = d["payout"]
+                atr = d["atr"]
+                momentum_norm = d["momentum_norm"]
+                liquidity_norm = d["liquidity_norm"]
+                
+                payout_norm = min(payout / 95.0, 1.0)
+                atr_norm = min(atr / atr_reference, 1.0)
+                
+                score = (payout_norm * 40.0) + (atr_norm * 30.0) + (momentum_norm * 20.0) + (liquidity_norm * 10.0)
+                
+                logger.debug(f"📊 {asset} score={score:.3f} | payout_n={payout_norm:.2f} atr_n={atr_norm:.2f} momentum_n={momentum_norm:.2f} liquidity_n={liquidity_norm:.2f}")
+                
+                # Tiebreaker logic: if score is almost identical, pick the one with highest ATR
+                update_best = False
+                if score > best_score + 0.01:
+                    update_best = True
+                elif abs(score - best_score) <= 0.01:
+                    if best_stats and atr > best_stats.get("atr", 0):
+                        update_best = True
+
+                if update_best:
+                    best_score = score
+                    best_asset = asset
+                    best_stats = {"payout": payout, "atr": atr, "score": score}
             for asset, payout in top_candidates:
                 try:
                     # Strip IQ option internal suffixes if we need to request properly from get_historical_data

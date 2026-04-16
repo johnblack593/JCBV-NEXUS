@@ -514,9 +514,18 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
 
         while remaining > 0:
             batch_size = min(remaining, 1000)
-            candles = await asyncio.to_thread(
-                self._api.get_candles, asset_clean, size, batch_size, end_from_time
-            )
+            t_start = time.perf_counter()
+            try:
+                candles = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self._api.get_candles, asset_clean, size, batch_size, end_from_time
+                    ),
+                    timeout=8.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout en get_candles para {asset_clean} tf={tf}")
+                return pd.DataFrame()
+
             if not candles:
                 break
 
@@ -543,5 +552,6 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
         for col in ['open', 'high', 'low', 'close', 'volume']:
             df[col] = df[col].astype(float)
 
-        logger.info(f"✅ {len(df)} velas descargadas para {asset} ({tf})")
+        latency = time.perf_counter() - t_start
+        logger.info(f"✅ {len(df)} velas descargadas para {asset} [TF:{tf}] ({latency:.2f}s)")
         return df
