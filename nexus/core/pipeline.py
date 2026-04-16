@@ -754,17 +754,21 @@ class NexusPipeline:
             logger.info("⏭️  TICK END — sin señal (motivo: Error interno)")
             return
 
-        if signal_dir == "HOLD":
-            # Si el modelo devuelve HOLD pero logramos llegar aquí (gracias al Fallback del Consensus),
-            # extraemos la dirección de la predicción plana estricta del indicador rf_prediction.
-            rf_pred = signal_result.get("indicators", {}).get("rf_prediction", -1)
-            if rf_pred == 1:
+        if consensus_best.signal == "HOLD" and consensus_best.composite > 0:
+            # Extraer convicción latente del modelo RF
+            rf_raw = consensus_best.extra.get("rf_prediction", -1)
+            if rf_raw == 1:
                 signal_dir = "BUY"
-            elif rf_pred == 0:
+                logger.info(f"🔀 HOLD→BUY forzado por rf_prediction | {consensus_best.symbol}")
+            elif rf_raw == 0:
                 signal_dir = "SELL"
+                logger.info(f"🔀 HOLD→SELL forzado por rf_prediction | {consensus_best.symbol}")
             else:
-                logger.info("⏭️  TICK END — sin señal (motivo: signal HOLD y sin raw prediction)")
+                logger.info("⏭️ TICK END — sin señal (HOLD sin rf_prediction válido)")
                 return
+        elif signal_dir == "HOLD":
+            logger.info("⏭️  TICK END — sin señal (motivo: signal HOLD)")
+            return
 
         logger.debug("▶️  Step 3: Consensus / Confidence")
         t_s3 = time.perf_counter()
@@ -779,6 +783,10 @@ class NexusPipeline:
             "RED":    999.0,  # nunca opera — ya bloqueado en Step 1
         }
         min_conf = THRESHOLDS.get(regime.value, 0.62)
+        
+        # Sincronizar pipeline con el umbral de validación dinámico del Consensus
+        if _ce_min_conf < min_conf:
+            min_conf = _ce_min_conf
         
         if raw_confidence < min_conf:
             logger.info(

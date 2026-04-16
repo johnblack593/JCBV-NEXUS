@@ -112,10 +112,19 @@ class BinaryMLExoticStrategy(BaseStrategy):
             clf.fit(X_train, y_train)
 
             # ── Predicción ───────────────────────────────────────────
+            # Probabilidad de clase 0 y clase 1
             proba = clf.predict_proba(X_pred)[0]  # [P(0), P(1)]
 
-            # Clase con mayor probabilidad
-            pred_class = int(np.argmax(proba))
+            # Clase con mayor probabilidad (nunca -1)
+            try:
+                if proba[1] > 0.5:
+                    pred_class = 1
+                else:
+                    pred_class = 0
+            except IndexError:
+                # Si por algún motivo predict_proba devuelve una sola clase
+                pred_class = int(clf.classes_[0]) if hasattr(clf, "classes_") and len(clf.classes_) > 0 else 1
+                
             confidence = float(np.max(proba))
 
             # Feature importances para diagnóstico

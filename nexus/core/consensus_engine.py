@@ -23,6 +23,7 @@ class AssetScore:
     payout: float
     atr: float
     composite: float     # score final para ranking
+    extra: dict = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
 
     @property
@@ -99,6 +100,7 @@ class ConsensusEngine:
                 payout=payout,
                 atr=atr,
                 composite=composite,
+                extra=result.get("indicators", {})
             )
             self._cache[symbol] = score
             return score
