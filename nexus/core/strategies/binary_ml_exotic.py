@@ -138,10 +138,14 @@ class BinaryMLExoticStrategy(BaseStrategy):
                 signal = "HOLD"
                 reason = f"RF indeciso (prob={confidence:.3f}, class={pred_class})"
 
+            # Extraer ATR real para el ConsensusEngine
+            last_atr = float(features_df["atr"].iloc[-1]) if "atr" in features_df else 0.001
+
             # El clf se destruye aquí al salir del scope (GC)
             return {
                 "signal": signal,
                 "confidence": round(confidence, 4),
+                "atr": last_atr,
                 "reason": reason,
                 "indicators": {
                     "rf_prediction": pred_class,

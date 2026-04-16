@@ -57,7 +57,14 @@ class ConsensusEngine:
             signal = result.get("signal", "HOLD")
             confidence = result.get("confidence", 0.0)
             
-            atr = result.get("indicators", {}).get("atr", 0.0)
+            # ✅ Extracción defensiva multicapa con fallback seguro
+            atr = (
+                result.get("atr")
+                or result.get("indicators", {}).get("atr")
+                or result.get("metrics", {}).get("atr")
+                or result.get("technical", {}).get("atr")
+                or 0.001
+            )
             
             # Payout de real_payouts si existe, sino fallback a result o 80.0
             payout = 80.0
@@ -66,9 +73,20 @@ class ConsensusEngine:
             else:
                 payout = result.get("payout", 80.0)
 
+            logger.debug(
+                f"[{symbol}] ATR extraído={atr:.6f} | "
+                f"fuente={'real_payouts' if real_payouts and symbol in real_payouts else 'analyze_fn'}"
+            )
+
             # Score compuesto: 60% confianza + 25% payout normalizado + 15% ATR
             norm_payout = min(payout / 100.0, 1.0)
-            norm_atr = min(atr / 0.001, 1.0)  # normalizar ATR forex OTC
+            if atr > 1.0:
+                # Activo de precio alto (índices OTC, commodities): escala diferente
+                norm_atr = min(atr / 10.0, 1.0)
+            else:
+                # Activo Forex / cripto de precio bajo: escala original
+                norm_atr = min(atr / 0.001, 1.0)
+                
             composite = (confidence * 0.60) + (norm_payout * 0.25) + (norm_atr * 0.15) if signal != "HOLD" else 0.0
 
             score = AssetScore(
@@ -94,7 +112,7 @@ class ConsensusEngine:
         real_payouts: dict[str, float] = None,
         min_conf: float = 0.62,
         min_payout: float = 80.0,
-        atr_floor: float = 0.00005,
+        atr_floor: float = 0.0001,
     ) -> Optional[AssetScore]:
         """
         Evalúa todos los activos en paralelo con threshold en cascada.
