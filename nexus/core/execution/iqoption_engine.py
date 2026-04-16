@@ -376,6 +376,7 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
         """
         Espera activamente a que termine la opción y extrae el resultado usando check_win_v4
         y actualizando el balance inmediatamente.
+        Internamente JCBV check_win_v4 maneja el websocket y la sincronización con asyncio.Event o custom callbacks.
         """
         out, profit = await self.check_trade_result(order_id)
         if out is None:

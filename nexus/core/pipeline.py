@@ -505,16 +505,16 @@ class NexusPipeline:
         regime_factor = 1.0
         
         # Ajustar umbrales según régimen
-        min_conf_yellow = 0.65
-        min_conf_red = 0.75
+        MIN_CONFIDENCE_YELLOW = 0.65
+        MIN_CONFIDENCE_RED = 0.75
         
         if regime == MacroRegime.YELLOW:
             regime_factor = 0.8  # Reduce confidence 20%
-            min_conf = min_conf_yellow
+            min_conf = MIN_CONFIDENCE_YELLOW
             logger.info("🟡 RÉGIMEN AMARILLO — aplicando reducción de confianza 20%")
         elif regime == MacroRegime.RED:
             regime_factor = 0.5
-            min_conf = min_conf_red
+            min_conf = MIN_CONFIDENCE_RED
         elif regime == MacroRegime.GREEN:
             min_conf = self._config.get("min_confidence", 0.55)
             
@@ -733,8 +733,8 @@ class NexusPipeline:
                         "size": _size,
                         "payout_pct": _payout,
                         "outcome": _outcome,
-                        "pnl": round(_pnl, 4),
-                        "balance": round(final_balance, 2),
+                        "profit_net": round(_pnl, 4),
+                        "balance_after": round(final_balance, 2),
                         "venue": _venue,
                         "latency_ms": result.latency_ms,
                     })
@@ -1124,8 +1124,15 @@ class NexusPipeline:
             except Exception:
                 pass
 
-        # Final stats
+        # resumen de sesión
         stats = self.get_session_stats()
+        logger.info(
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"  📈 resumen de sesión en {stats['venue']}\n"
+            f"  Operaciones totales: {stats['total_trades']}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
+
         logger.info(
             f"🛑 NEXUS Pipeline — Shutdown complete | "
             f"Trades: {stats['total_trades']} | "

@@ -39,7 +39,7 @@ _TZ_GMT5 = timezone(timedelta(hours=-5))
 # ── CSV Column Definitions ────────────────────────────────────────────
 _TRADE_COLUMNS = [
     "timestamp", "asset", "direction", "size", "payout_pct",
-    "outcome", "pnl", "balance", "venue",
+    "outcome", "profit_net", "balance_after", "venue", "latency_ms"
 ]
 
 _EQUITY_COLUMNS = ["timestamp", "balance"]
@@ -89,7 +89,7 @@ class LocalJournal:
 
         Args:
             trade: Dict con claves: timestamp, asset, direction, size,
-                   payout_pct, outcome, pnl, balance, venue
+                   payout_pct, outcome, profit_net, balance_after, venue, latency_ms
         """
         try:
             needs_header = not self._trades_path.exists() or self._trades_path.stat().st_size == 0
