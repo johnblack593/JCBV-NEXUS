@@ -109,11 +109,7 @@ class AssetIntelligenceService:
             # 2. Verificar cache local/Redis si existe
             if symbol in self._local_cache:
                 cached = self._local_cache[symbol]
-                status = cached.get("status")
-                if isinstance(status, AssetStatus):
-                    return status == AssetStatus.AVAILABLE
-                if isinstance(status, str):
-                    return status == AssetStatus.AVAILABLE.value
+                return cached.get("status") == AssetStatus.AVAILABLE.value
             if self._redis:
                 try:
                     c = self._redis.get(f"nexus:asset:{symbol}")
@@ -173,7 +169,7 @@ class AssetIntelligenceService:
                 cd = self._local_cache[symbol]
                 dt = cd["checked_at"]
                 if (datetime.now(UTC) - dt).total_seconds() < self.CACHE_TTL:
-                    return AssetInfo(cd["symbol"], cd["active_id"], cd["status"], cd["profit"], "cache", dt, cd["message"])
+                    return AssetInfo(cd["symbol"], cd["active_id"], AssetStatus(cd["status"]), cd["profit"], "cache", dt, cd["message"])
                     
             # 2. Schedule
             sched_status = self.is_available_by_schedule(symbol)
@@ -240,7 +236,7 @@ class AssetIntelligenceService:
         self._local_cache[info.symbol] = {
             "symbol": info.symbol,
             "active_id": info.active_id,
-            "status": info.status,
+            "status": info.status.value,  # Always store as string for consistent reads
             "profit": info.profit,
             "source": info.source,
             "checked_at": info.checked_at,

@@ -139,26 +139,31 @@ class ConsensusEngine:
         if not watchlist:
             return None
 
-        tasks = [
-            self._evaluate_single(symbol, get_data_fn, analyze_fn, real_payouts)
-            for symbol in watchlist
-        ]
+        # Evaluación SERIAL — evita contaminación de estado entre calls a analyze_fn.
+        # asyncio.gather() causaba ATR LEAK: la misma instancia de strategy
+        # compartía estado implícito entre coroutines intercaladas en el event loop.
+        raw_results = []
+        for symbol in watchlist:
+            try:
+                r = await self._evaluate_single(symbol, get_data_fn, analyze_fn, real_payouts)
+                raw_results.append(r)
+            except Exception as e:
+                logger.debug(f"[{symbol}] evaluate_single exception: {e}")
+                raw_results.append(None)
 
-        # Evaluación paralela — todos los activos al mismo tiempo
-        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
         results: list[AssetScore] = [
             r for r in raw_results
             if isinstance(r, AssetScore) and not r.is_expired
         ]
         
-        # Diagnostic: Log identical ATRs
+        # Diagnostic: Log ATR coincidences at DEBUG (no longer a leak with serial eval)
         if len(results) >= 2:
             import itertools
             for a, b in itertools.combinations(results, 2):
-                if a.atr == b.atr and a.atr > 0.0011: # Ignorar fallbacks default
+                if a.atr == b.atr and a.atr > 0.0011:
                     logger.debug(
                         f"[diag] ATR coincidence: {a.symbol} and {b.symbol} "
-                        f"share ATR={a.atr:.6f} (may be legitimate for correlated pairs)"
+                        f"share ATR={a.atr:.6f} (legitimate for correlated pairs)"
                     )
         
         # Log detallado con el threshold de ejecución del pipeline
