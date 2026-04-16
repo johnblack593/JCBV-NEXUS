@@ -55,6 +55,7 @@ from .strategies.binary_ml_exotic import BinaryMLExoticStrategy
 from .strategies.bitget_trend_scalper import BitgetTrendScalperStrategy
 from nexus.reporting.telegram_reporter import TelegramReporter
 from nexus.storage.local_journal import LocalJournal
+from nexus.infrastructure.incident_logger import PipelineContextAdapter
 
 logger = logging.getLogger("nexus.pipeline")
 
@@ -613,10 +614,19 @@ class NexusPipeline:
 
         tick_count = getattr(self, '_cycle_count', 0) + 1
         self._cycle_count = tick_count
+
+        # ── Incident Logger context adapter ──────────────────────────
+        tick_log = PipelineContextAdapter(logger, {
+            "cycle": tick_count,
+            "asset": "",
+            "step": "Step 0: Init",
+            "macro_regime": macro_regime_str,
+        })
+
         wl_str = str(eval_watchlist[:3])
         if len(eval_watchlist) > 3:
             wl_str = wl_str[:-1] + ", ...]"
-        logger.info(
+        tick_log.info(
             f"⏱️  TICK START — ciclo={tick_count} | "
             f"agente={agent_symbol or 'sin agente'} | "
             f"watchlist={wl_str}"
@@ -655,7 +665,9 @@ class NexusPipeline:
                     real_payouts[agent_symbol] = self.opportunity_agent.best_stats["payout"]
                 
         except Exception as e:
-            logger.warning(f"⚠️ No se pudo obtener payouts reales: {e} — usando fallback")
+            tick_log.warning(f"⚠️ No se pudo obtener payouts reales: {e} — usando fallback")
+
+        tick_log.extra["step"] = "Step 4c: Consensus Evaluation"
 
         async def _get_data_for_consensus(symbol: str):
             """Wrapper para obtener datos de mercado por símbolo."""
@@ -665,7 +677,7 @@ class NexusPipeline:
                     return df
                 return None
             except Exception as e:
-                logger.error(f"❌ Error en _tick() Step Descarga Consensus: {e}", exc_info=True)
+                tick_log.error(f"❌ Error en _tick() Step Descarga Consensus: {e}", exc_info=True)
                 return None
 
         consensus_best = await self.consensus_engine.evaluate(
@@ -680,7 +692,7 @@ class NexusPipeline:
 
         if consensus_best is None:
             # Ningún activo de la watchlist pasó filtros — tick limpio
-            logger.info(
+            tick_log.info(
                 f"⏭️  TICK END — sin señal "
                 f"(ConsensusEngine: no hay activo con señal ejecutable en este momento)"
             )
@@ -689,7 +701,15 @@ class NexusPipeline:
         # El ConsensusEngine eligió el mejor activo — usarlo en Steps 5+
         self._config["asset"] = consensus_best.symbol
 
+        # Actualizar contexto del incident logger con el activo seleccionado
+        tick_log.extra["asset"] = consensus_best.symbol
+        tick_log.extra["last_consensus"] = (
+            f"{consensus_best.symbol} | conf={consensus_best.confidence:.1%} | "
+            f"signal={consensus_best.signal}"
+        )
+
         # ── Step 5: Validar Disponibilidad y Get Market Data ─────────
+        tick_log.extra["step"] = "Step 5: Availability & Market Data"
         from nexus.services.asset_intelligence import AssetStatus
         base_asset = self._config.get("asset", "EURUSD-OTC")
         
@@ -697,7 +717,7 @@ class NexusPipeline:
         asset_info = await self.asset_svc.get_asset_info(base_asset)
 
         if asset_info.status == AssetStatus.UNAVAILABLE:
-            logger.info(f"⏸️  {base_asset} no disponible ahora — saltando tick")
+            tick_log.info(f"⏸️  {base_asset} no disponible ahora — saltando tick")
             return  # No operar, esperar próximo tick
 
         if asset_info.status == AssetStatus.UNKNOWN:
@@ -706,10 +726,10 @@ class NexusPipeline:
             watchlist = self.asset_svc.get_current_watchlist(macro_regime_str)
             best = await self.asset_svc.get_best_available(watchlist)
             if best is None:
-                logger.warning("⚠️  Ningún activo disponible — saltando tick")
+                tick_log.warning("⚠️  Ningún activo disponible — saltando tick")
                 return
             active_symbol = best.symbol
-            logger.info(f"🔄 Usando activo alternativo: {active_symbol} ({best.profit:.0%} profit)")
+            tick_log.info(f"🔄 Usando activo alternativo: {active_symbol} ({best.profit:.0%} profit)")
         else:
             active_symbol = base_asset
             
@@ -718,10 +738,10 @@ class NexusPipeline:
 
         asset, df = await self._get_market_data(active_symbol, eval_watchlist)
         if df is None or df.empty or len(df) < 30:
-            logger.info("⏭️  TICK END — sin señal (motivo: datos insuficientes)")
+            tick_log.info("⏭️  TICK END — sin señal (motivo: datos insuficientes)")
             return  # Datos insuficientes
 
-        logger.info(f"📊 DATOS OK — {len(df)} velas listas → iniciando Steps 1-5")
+        tick_log.info(f"📊 DATOS OK — {len(df)} velas listas → iniciando Steps 1-5")
 
         # ── Step 6: AI Mode — Dynamic Parameter Injection ─────────────
         if self.redis_client and self.signal_engine:
@@ -736,9 +756,10 @@ class NexusPipeline:
                         opt_params = _json.loads(opt_decoded)
                         self.signal_engine.apply_overrides(opt_params)
             except Exception as e:
-                logger.error(f"❌ Error en _tick() Step AI Options: {e}", exc_info=True)
+                tick_log.error(f"❌ Error en _tick() Step AI Options: {e}", exc_info=True)
 
-        logger.debug("▶️  Step 1: Feature Engineering")
+        tick_log.extra["step"] = "Step 6b: Signal Generation"
+        tick_log.debug("▶️  Step 1: Feature Engineering")
         t_s1 = time.perf_counter()
         
         # ── Step 6b: Generate Signal (Strategy Pattern — Layer 3) ─────
@@ -749,16 +770,16 @@ class NexusPipeline:
             
             # Simulated Step 1 parsing (Feature Engineering happens inside analyze)
             elapsed_s1 = time.perf_counter() - t_s1
-            logger.debug(f"✅ Step 1 completado en {elapsed_s1:.2f}s")
+            tick_log.debug(f"✅ Step 1 completado en {elapsed_s1:.2f}s")
             
-            logger.debug("▶️  Step 2: Signal Evaluation")
+            tick_log.debug("▶️  Step 2: Signal Evaluation")
             t_s2 = time.perf_counter()
             # Simulated Step 2 parsing (Evaluation happens inside analyze)
             elapsed_s2 = time.perf_counter() - t_s2
-            logger.debug(f"✅ Step 2 completado en {elapsed_s2:.2f}s")
+            tick_log.debug(f"✅ Step 2 completado en {elapsed_s2:.2f}s")
         except Exception as e:
-            logger.error(f"❌ Error en _tick() Step 1/2: {e}", exc_info=True)
-            logger.info("⏭️  TICK END — sin señal (motivo: Error interno)")
+            tick_log.error(f"❌ Error en _tick() Step 1/2: {e}", exc_info=True)
+            tick_log.info("⏭️  TICK END — sin señal (motivo: Error interno)")
             return
 
         if consensus_best.signal == "HOLD" and consensus_best.composite > 0:
@@ -826,20 +847,22 @@ class NexusPipeline:
         elapsed_s4 = time.perf_counter() - t_s4
         logger.debug(f"✅ Step 4 completado en {elapsed_s4:.2f}s")
         
-        logger.debug("▶️  Step 5: Execution")
+        tick_log.extra["step"] = "Step 5: Execution"
+        tick_log.debug("▶️  Step 5: Execution")
 
         # ── Fix 1: Pre-execution availability guard ───────────────
         is_available = await self.asset_svc.is_available(asset)
         if not is_available:
-            logger.warning(f"⏭️ {asset} suspendido — buscando alternativa")
+            tick_log.warning(f"⏭️ {asset} suspendido — buscando alternativa")
             _alt_watchlist = self.asset_svc.get_current_watchlist(regime.value)
             _alt_candidates = [s for s in _alt_watchlist if s != asset]
             best_alt = await self.asset_svc.get_best_available(_alt_candidates)
             if not best_alt:
-                logger.info("⏭️ TICK END — todos los activos suspendidos")
+                tick_log.info("⏭️ TICK END — todos los activos suspendidos")
                 return
             asset = best_alt.symbol
             self._config["asset"] = asset
+            tick_log.extra["asset"] = asset
 
         # ── Step 10: Build TradeSignal (with Active Trade Management) ─
         direction = self._map_signal_to_direction(signal_dir)
@@ -899,7 +922,7 @@ class NexusPipeline:
             try:
                 result = await self.execution_engine.execute(trade_signal)
             except Exception as exc:
-                logger.error(f"Ejecución fallida: {exc}", exc_info=True)
+                tick_log.error(f"Ejecución fallida: {exc}", exc_info=True)
                 self.telegram.fire_system_error(
                     f"Ejecución fallida en {asset}: {exc}",
                     module="execution_engine"
@@ -911,7 +934,7 @@ class NexusPipeline:
             if result.status == ExecutionStatus.ERROR:
                 err_msg = (result.error_message or "").lower()
                 if "suspended" in err_msg or "active is suspended" in err_msg:
-                    logger.warning(
+                    tick_log.warning(
                         f"🚫 Activo {asset} SUSPENDIDO por IQ Option — "
                         f"forzando rotación a siguiente activo."
                     )

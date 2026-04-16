@@ -85,6 +85,10 @@ def setup_logging() -> None:
     ]:
         logging.getLogger(name).setLevel(logging.WARNING)
 
+    # ── Install NexusIncidentLogger (JSON Lines anomaly capture) ──
+    from nexus.infrastructure.incident_logger import install_incident_logger
+    install_incident_logger(log_dir="logs")
+
 
 # ══════════════════════════════════════════════════════════════════════
 #  Pre-Flight Health Checks
