@@ -107,7 +107,15 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
                 self._api = IQ_Option(self._email, self._password)
 
                 try:
-                    check, reason = await asyncio.to_thread(self._api.connect)
+                    # Timeout duro (30s) para evitar hang en el INIT masivo del catálogo
+                    future_connect = asyncio.to_thread(self._api.connect)
+                    check, reason = await asyncio.wait_for(future_connect, timeout=30.0)
+                except asyncio.TimeoutError:
+                    logger.warning("⚠️ IQ Option init timeout (30s) — continuando con fallback sin catálogo completo")
+                    # No abortamos. Permitimos modo degradado (api connected, catalog incomplet).
+                    check = True
+                    reason = "Timeout_Fallback"
+                    self._connected = True
                 except Exception as conn_exc:
                     logger.warning(
                         f"⚠️ Excepción en API.connect() intento {attempt}: {conn_exc}"

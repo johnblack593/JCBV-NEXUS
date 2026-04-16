@@ -81,6 +81,7 @@ def setup_logging() -> None:
     for name in [
         "urllib3", "httpx", "asyncio", "binance", "websocket",
         "tensorflow", "absl", "grpc", "h5py",
+        "iqoptionapi", "iqoptionapi.ws.client", "iqoptionapi.api", "aiohttp.retry"
     ]:
         logging.getLogger(name).setLevel(logging.WARNING)
 

@@ -201,11 +201,14 @@ class NexusPipeline:
 
         # ── Layer 5: Execution Engine (Factory) ───────────────────────
         self.execution_engine = get_execution_engine(force_venue=self.venue)
+        logger.info("⏳ Conectando a IQ Option... [puede tomar hasta 30s cargando catálogo de activos]")
         connected = await self.execution_engine.connect()
         if connected:
+            logger.info("✅ Login OK (Catálogo verificado o ejecutando en Fallback)")
+            logger.info("⏳ Iniciando setup y balance de cuenta...")
             balance = await self.execution_engine.get_balance()
             self.risk_manager.update_portfolio(balance, [])
-            logger.info(f"💰 Balance inicial: ${balance:.2f}")
+            logger.info(f"✅ Balance inicial: ${balance:.2f}")
 
             self.opportunity_agent = OpportunityAgent(
                 execution_engine=self.execution_engine,
