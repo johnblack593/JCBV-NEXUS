@@ -99,6 +99,34 @@ class AssetIntelligenceService:
                     
         return AssetStatus.UNAVAILABLE
 
+    async def is_available(self, symbol: str) -> bool:
+        """Guard de disponibilidad: retorna False si el activo está suspendido o fuera de horario."""
+        try:
+            # 1. Verificar static schedule primero (0 latencia)
+            sched = self.is_available_by_schedule(symbol)
+            if sched in (AssetStatus.UNAVAILABLE, AssetStatus.MAINTENANCE):
+                return False
+            # 2. Verificar cache local/Redis si existe
+            if symbol in self._local_cache:
+                cached = self._local_cache[symbol]
+                status = cached.get("status")
+                if isinstance(status, AssetStatus):
+                    return status == AssetStatus.AVAILABLE
+                if isinstance(status, str):
+                    return status == AssetStatus.AVAILABLE.value
+            if self._redis:
+                try:
+                    c = self._redis.get(f"nexus:asset:{symbol}")
+                    if c:
+                        cd = json.loads(c.decode() if isinstance(c, bytes) else c)
+                        return cd.get("status") == AssetStatus.AVAILABLE.value
+                except Exception:
+                    pass
+            # 3. Si no hay cache, asumir disponible (fail-open)
+            return True
+        except Exception:
+            return True  # Fail-open: ante duda, intentar
+
     async def probe_asset(self, symbol: str) -> AssetInfo:
         # Default mock probe block if no api is given
         if not self._api:

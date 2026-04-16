@@ -832,11 +832,13 @@ class NexusPipeline:
         is_available = await self.asset_svc.is_available(asset)
         if not is_available:
             logger.warning(f"⏭️ {asset} suspendido — buscando alternativa")
-            active_symbol = await self.asset_svc.get_best_available(regime.value)
-            if not active_symbol:
+            _alt_watchlist = self.asset_svc.get_current_watchlist(regime.value)
+            _alt_candidates = [s for s in _alt_watchlist if s != asset]
+            best_alt = await self.asset_svc.get_best_available(_alt_candidates)
+            if not best_alt:
                 logger.info("⏭️ TICK END — todos los activos suspendidos")
                 return
-            asset = active_symbol
+            asset = best_alt.symbol
             self._config["asset"] = asset
 
         # ── Step 10: Build TradeSignal (with Active Trade Management) ─

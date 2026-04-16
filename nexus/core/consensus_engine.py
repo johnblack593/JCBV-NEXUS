@@ -35,7 +35,8 @@ class AssetScore:
 class ConsensusEngine:
     """
     Evalúa en paralelo todos los activos de la watchlist.
-    Implementa fallback de cascada 62% -> 55% -> 50%.
+    RANKEA candidatos con un threshold interno bajo (0.50).
+    El pipeline aplica el threshold de ejecución real.
     """
 
     def __init__(self) -> None:
@@ -58,14 +59,18 @@ class ConsensusEngine:
             signal = result.get("signal", "HOLD")
             confidence = result.get("confidence", 0.0)
             
-            # ✅ Extracción defensiva multicapa con fallback seguro
-            atr = (
-                result.get("atr")
-                or result.get("indicators", {}).get("atr")
-                or result.get("metrics", {}).get("atr")
-                or result.get("technical", {}).get("atr")
-                or 0.001
-            )
+            # ✅ Extracción defensiva multicapa — explicit None checks
+            # NUNCA usar `or` chain: 0.0 es falsy en Python y causa fallthrough
+            atr = result.get("atr")
+            if atr is None or (isinstance(atr, float) and atr <= 0):
+                atr = result.get("indicators", {}).get("atr")
+            if atr is None or (isinstance(atr, float) and atr <= 0):
+                atr = result.get("metrics", {}).get("atr")
+            if atr is None or (isinstance(atr, float) and atr <= 0):
+                atr = result.get("technical", {}).get("atr")
+            if atr is None or (isinstance(atr, float) and atr <= 0):
+                atr = 0.001
+            atr = float(atr)
             
             # Payout de real_payouts si existe, sino fallback a result o 80.0
             payout = 80.0
@@ -109,6 +114,11 @@ class ConsensusEngine:
             logger.debug(f"[{symbol}] ConsensusEngine error: {e}")
             return None
 
+    # ─── Threshold INTERNO del consensus (para rankear candidatos) ──
+    # Este umbral es bajo intencionalmente: el consensus RANKEA, no AUTORIZA.
+    # El threshold de EJECUCIÓN se aplica en el pipeline, NO aquí.
+    INTERNAL_MIN_CONF = 0.50
+
     async def evaluate(
         self,
         watchlist: list[str],
@@ -120,10 +130,11 @@ class ConsensusEngine:
         atr_floor: float = 0.0001,
     ) -> Optional[AssetScore]:
         """
-        Evalúa todos los activos en paralelo con threshold en cascada.
-        Intento 1: min_conf
-        Intento 2: 0.55
-        Intento 3: 0.50 (solo para loguear)
+        Evalúa todos los activos en paralelo y retorna el mejor candidato.
+
+        El consensus RANKEA candidatos — NO decide si se ejecuta el trade.
+        El threshold de ejecución (min_conf) se usa para logging/diagnóstico.
+        La decisión final de ejecución la toma el pipeline.
         """
         if not watchlist:
             return None
@@ -140,17 +151,17 @@ class ConsensusEngine:
             if isinstance(r, AssetScore) and not r.is_expired
         ]
         
-        # Diagnostic Fix 3: Log identical ATRs (Possible state leak)
+        # Diagnostic: Log identical ATRs
         if len(results) >= 2:
             import itertools
             for a, b in itertools.combinations(results, 2):
                 if a.atr == b.atr and a.atr > 0.0011: # Ignorar fallbacks default
-                    logger.warning(
-                        f"🚨 ATR LEAK? {a.symbol} and {b.symbol} "
-                        f"share identical ATR: {a.atr}. Possible state contamination."
+                    logger.debug(
+                        f"[diag] ATR coincidence: {a.symbol} and {b.symbol} "
+                        f"share ATR={a.atr:.6f} (may be legitimate for correlated pairs)"
                     )
         
-        # Guardar en log detallado con el min_conf principal
+        # Log detallado con el threshold de ejecución del pipeline
         for r in results:
             conf_ok = r.confidence >= min_conf
             payout_ok = r.payout >= min_payout
@@ -159,7 +170,6 @@ class ConsensusEngine:
             
             passes = signal_ok and conf_ok and payout_ok and atr_ok
             
-            # Log exhaustivo
             logger.debug(
                 f"🔬 {r.symbol}: "
                 f"conf={r.confidence:.3f}≥{min_conf:.2f}={'✅' if conf_ok else '❌'} | "
@@ -182,44 +192,45 @@ class ConsensusEngine:
                 f"→ {'✅ PASA' if passes else '❌ FILTRADO'}{motivo}"
             )
 
-        # Fallback de confianza
-        thresholds = [min_conf, 0.55, 0.50]
-        
-        for attempt, thresh in enumerate(thresholds):
-            # En intentos de fallback (attempt > 0), incluir señales HOLD
-            # para no desperdiciar setups válidos por señal neutral
-            exclude_hold = (attempt == 0)  # Solo primer intento filtra HOLD
-            valid = [
+        # ── Selección del mejor candidato (ranking interno) ──────────
+        # Filtrar con INTERNAL_MIN_CONF (bajo): solo para descartar ruido total
+        # El pipeline aplica su propio threshold de ejecución después
+        candidates = [
+            r for r in results
+            if r.signal != "HOLD"
+            and r.confidence >= self.INTERNAL_MIN_CONF
+            and r.atr >= atr_floor
+            and r.payout >= min_payout
+        ]
+
+        if not candidates:
+            # Intentar con HOLD incluido (rf_prediction puede rescatarlos en pipeline)
+            candidates = [
                 r for r in results
-                if (r.signal != "HOLD" or not exclude_hold)
-                and r.confidence >= thresh
+                if r.confidence >= self.INTERNAL_MIN_CONF
                 and r.atr >= atr_floor
                 and r.payout >= min_payout
             ]
-            
-            if valid:
-                if thresh == 0.50 and min_conf > 0.50:
-                    # Solo es diagnóstico si min_conf original era mayor
-                    best = max(valid, key=lambda s: s.confidence)
-                    logger.info(
-                        f"📊 MERCADO SIN SETUP: mejor conf disponible fue {best.confidence:.3f} "
-                        f"en {best.symbol} — esperando próximo tick"
-                    )
-                    return None
-                    
-                best = max(valid, key=lambda s: s.composite)
-                if attempt > 0:
-                    logger.info(f"⚠️ Alerta: Consensus validó {best.symbol} usando fallback de confianza {thresh:.2f}")
-                    
-                logger.info(
-                    f"✅ Consensus: MEJOR={best.symbol} | "
-                    f"conf={best.confidence:.1%} | signal={best.signal} | "
-                    f"composite={best.composite:.3f} | "
-                    f"candidatos={len(valid)}/{len(watchlist)}"
+
+        if candidates:
+            best = max(candidates, key=lambda s: s.composite)
+
+            # Log transparente: indicar si el candidato pasa o no el threshold de ejecución
+            if best.confidence < min_conf:
+                logger.debug(
+                    f"[consensus interno] {best.symbol} seleccionado con conf={best.confidence:.3f} "
+                    f"(ranking interno, threshold ejecución {min_conf:.2f} se aplica en pipeline)"
                 )
-                return best
+            
+            logger.info(
+                f"✅ Consensus: MEJOR={best.symbol} | "
+                f"conf={best.confidence:.1%} | signal={best.signal} | "
+                f"composite={best.composite:.3f} | "
+                f"candidatos={len(candidates)}/{len(watchlist)}"
+            )
+            return best
                 
-        # Si llegamos aquí ni con 0.50 hubo setup
+        # Sin candidatos viables
         best_overall = max(results, key=lambda s: s.confidence) if results else None
         if best_overall and best_overall.confidence > 0:
             logger.info(
@@ -229,7 +240,8 @@ class ConsensusEngine:
         else:
             logger.debug(
                 f"ConsensusEngine: 0/{len(watchlist)} activos pasaron filtros "
-                f"(min_conf={min_conf:.0%}, min_payout={min_payout:.0f}%)"
+                f"(internal_min={self.INTERNAL_MIN_CONF:.0%}, min_payout={min_payout:.0f}%)"
             )
             
         return None
+
