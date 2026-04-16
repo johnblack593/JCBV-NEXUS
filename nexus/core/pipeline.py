@@ -437,11 +437,22 @@ class NexusPipeline:
             if self.venue == "BITGET":
                 tick_interval = 300  # 5 min — aligns with BitgetTrendScalper 5m TF
             else:
-                tick_interval = 60   # 1 min — IQ Option sniper mode
+                asset_name = self._config.get("asset", "")
+                if "OTC" in asset_name.upper():
+                    tick_interval = 30
+                else:
+                    tick_interval = 45
+                
             await asyncio.sleep(tick_interval)
 
     async def _tick(self) -> None:
         """Single pipeline tick — evalúa una oportunidad de trading."""
+        tick_count = getattr(self, '_cycle_count', 0) + 1
+        self._cycle_count = tick_count
+        
+        symbol_base = self._config.get("asset", "UNKNOWN")
+        logger.info(f"⏱️  TICK START — activo={symbol_base} | ciclo={tick_count}")
+
         t_start = time.perf_counter()
 
         # ── Step 0: PANIC MODE (Kill Switch from OCP Dashboard) ──────
@@ -577,7 +588,8 @@ class NexusPipeline:
                 if df is not None and len(df) >= 30:
                     return df
                 return None
-            except Exception:
+            except Exception as e:
+                logger.error(f"❌ Error en _tick() Step Descarga Consensus: {e}", exc_info=True)
                 return None
 
         consensus_best = await self.consensus_engine.evaluate(
@@ -591,6 +603,7 @@ class NexusPipeline:
 
         if consensus_best is None:
             # Ningún activo de la watchlist pasó filtros — tick limpio
+            logger.info("⏭️  TICK END — sin señal (motivo: sin activos evaluados en watchlist)")
             return
 
         # El ConsensusEngine eligió el mejor activo — usarlo en Steps 5+
@@ -625,11 +638,12 @@ class NexusPipeline:
 
         asset, df = await self._get_market_data(active_symbol, watchlist)
         if df is None or df.empty or len(df) < 30:
+            logger.info("⏭️  TICK END — sin señal (motivo: datos insuficientes)")
             return  # Datos insuficientes
 
+        logger.info(f"📊 DATOS OK — {len(df)} velas listas → iniciando Steps 1-5")
+
         # ── Step 6: AI Mode — Dynamic Parameter Injection ─────────────
-        # If AI_MODE == 1, read regime-optimized params from Redis
-        # and inject them into the signal engine before signal generation.
         if self.redis_client and self.signal_engine:
             try:
                 ai_mode = self.redis_client.get("NEXUS:AI_MODE")
@@ -641,17 +655,39 @@ class NexusPipeline:
                         opt_decoded = opt_raw.decode() if isinstance(opt_raw, bytes) else opt_raw
                         opt_params = _json.loads(opt_decoded)
                         self.signal_engine.apply_overrides(opt_params)
-            except Exception:
-                pass  # AI Mode degradation — use current params
+            except Exception as e:
+                logger.error(f"❌ Error en _tick() Step AI Options: {e}", exc_info=True)
 
+        logger.debug("▶️  Step 1: Feature Engineering")
+        t_s1 = time.perf_counter()
+        
         # ── Step 6b: Generate Signal (Strategy Pattern — Layer 3) ─────
-        signal_result = await self.strategy.analyze(df)
-        signal_dir = signal_result.get("signal", "HOLD")
-        confidence = signal_result.get("confidence", 0.0)
-
-        if signal_dir == "HOLD":
+        try:
+            signal_result = await self.strategy.analyze(df)
+            signal_dir = signal_result.get("signal", "HOLD")
+            confidence = signal_result.get("confidence", 0.0)
+            
+            # Simulated Step 1 parsing (Feature Engineering happens inside analyze)
+            elapsed_s1 = time.perf_counter() - t_s1
+            logger.debug(f"✅ Step 1 completado en {elapsed_s1:.2f}s")
+            
+            logger.debug("▶️  Step 2: Signal Evaluation")
+            t_s2 = time.perf_counter()
+            # Simulated Step 2 parsing (Evaluation happens inside analyze)
+            elapsed_s2 = time.perf_counter() - t_s2
+            logger.debug(f"✅ Step 2 completado en {elapsed_s2:.2f}s")
+        except Exception as e:
+            logger.error(f"❌ Error en _tick() Step 1/2: {e}", exc_info=True)
+            logger.info("⏭️  TICK END — sin señal (motivo: Error interno)")
             return
 
+        if signal_dir == "HOLD":
+            logger.info("⏭️  TICK END — sin señal (motivo: signal HOLD)")
+            return
+
+        logger.debug("▶️  Step 3: Consensus / Confidence")
+        t_s3 = time.perf_counter()
+        
         # ── Step 7: Umbral Dinámico por Régimen (Institutional Standard) ─
         raw_confidence = confidence
         
@@ -668,21 +704,33 @@ class NexusPipeline:
                 f"⛔ SEÑAL RECHAZADA | {asset} | "
                 f"conf: {raw_confidence:.1%} < umbral {regime.value}: {min_conf:.1%}"
             )
+            logger.info(f"⏭️  TICK END — sin señal (motivo: confidence={raw_confidence:.3f} < {min_conf:.3f})")
             return
         
         # La confianza pasa directa, sin penalización
         confidence = raw_confidence
         
-        # Log solo cuando opera en YELLOW (señal de calidad real)
         if regime == MacroRegime.YELLOW:
             logger.info(
                 f"🟡 YELLOW OK | {asset} | conf: {confidence:.1%} ≥ {min_conf:.1%}"
             )
+            
+        elapsed_s3 = time.perf_counter() - t_s3
+        logger.debug(f"✅ Step 3 completado en {elapsed_s3:.2f}s")
+        
+        logger.debug("▶️  Step 4: Risk Check")
+        t_s4 = time.perf_counter()
 
         # ── Step 9: Position Sizing (Layer 4) ────────────────────────
         size = await self._calculate_size(confidence, df)
         if size <= 0:
+            logger.info("⏭️  TICK END — sin señal (motivo: size 0)")
             return
+            
+        elapsed_s4 = time.perf_counter() - t_s4
+        logger.debug(f"✅ Step 4 completado en {elapsed_s4:.2f}s")
+        
+        logger.debug("▶️  Step 5: Execution")
 
         # ── Step 10: Build TradeSignal (with Active Trade Management) ─
         direction = self._map_signal_to_direction(signal_dir)
@@ -769,6 +817,7 @@ class NexusPipeline:
                 return  # Salir del tick — el próximo tick usará el activo rotado
 
         self._log_execution(result, trade_signal, latency)
+        logger.info(f"🎯 TICK END — SEÑAL {direction.value} | conf={confidence:.3f} | {asset}")
 
         # ── Step 12: Post-Execution ──────────────────────────────────
         if result.status == ExecutionStatus.ERROR:
