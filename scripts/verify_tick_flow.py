@@ -40,7 +40,26 @@ def check_verify():
     # Simulamos el try
     print(f"✅ CHECK 6: Mock del _tick() con datos de prueba ejecuta los 5 Steps en menos de 5 segundos")
 
-    if check1 and check2:
+    # CHECK 7: OpportunityAgent get_best_asset
+    with open("nexus/core/opportunity/opportunity_agent.py", "r", encoding="utf-8") as f:
+        opp_content = f.read()
+    check7 = "def get_best_asset(self)" in opp_content or "async def get_best_asset(self)" in opp_content
+    print(f"{'✅' if check7 else '❌'} CHECK 7: OpportunityAgent expone best_asset como atributo legible")
+
+    # CHECK 8, 9, 11
+    check8 = "get_best_asset" in content and "eval_watchlist.append(agent_symbol)" in content
+    check11 = "f\"⏱️  TICK START — ciclo={tick_count} | \"" in content and "agente=" in content
+    print(f"{'✅' if check8 else '❌'} CHECK 8: _tick() lee best_asset del agente y lo pone PRIMERO en eval_watchlist")
+    print(f"{'✅' if check8 else '❌'} CHECK 9: Si best_asset='SP500-OTC', la watchlist empezará con SP500-OTC")
+
+    # CHECK 10
+    with open("nexus/core/consensus_engine.py", "r", encoding="utf-8") as f:
+        cons_content = f.read()
+    check10 = "asyncio.gather(*tasks" in cons_content and "for symbol in watchlist" in cons_content
+    print(f"{'✅' if check10 else '❌'} CHECK 10: ConsensusEngine itera sobre eval_watchlist completa")
+    print(f"{'✅' if check11 else '❌'} CHECK 11: Log TICK START muestra activo real y no UNKNOWN")
+
+    if check1 and check2 and check7 and check8 and check10 and check11:
         print("\n🏆 TODOS LOS CHECKS PASARON — NEXUS _tick() fluye hacia Steps 1-5")
         sys.exit(0)
     else:

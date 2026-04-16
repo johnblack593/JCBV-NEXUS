@@ -358,6 +358,19 @@ class NexusPipeline:
             )
 
         # ── Briefing Inicial de Mercado ────────────────────────────────
+        if self.opportunity_agent:
+            logger.info("⏳ Esperando primer resultado del agente de oportunidades (máx 20s)...")
+            waited = 0
+            while waited < 20:
+                agent_res = await self.opportunity_agent.get_best_asset()
+                if agent_res:
+                    logger.info(f"✅ Agente listo: {agent_res}")
+                    break
+                await asyncio.sleep(1)
+                waited += 1
+            if waited >= 20:
+                logger.warning("⏰ Agente sin resultado tras 20s — usando watchlist base")
+
         if self.execution_engine:
             try:
                 min_payout = self._config.get("min_payout", 80)
@@ -447,12 +460,6 @@ class NexusPipeline:
 
     async def _tick(self) -> None:
         """Single pipeline tick — evalúa una oportunidad de trading."""
-        tick_count = getattr(self, '_cycle_count', 0) + 1
-        self._cycle_count = tick_count
-        
-        symbol_base = self._config.get("asset", "UNKNOWN")
-        logger.info(f"⏱️  TICK START — activo={symbol_base} | ciclo={tick_count}")
-
         t_start = time.perf_counter()
 
         # ── Step 0: PANIC MODE (Kill Switch from OCP Dashboard) ──────
@@ -573,7 +580,39 @@ class NexusPipeline:
             if hasattr(self, 'macro_agent') and self.macro_agent
             and self.macro_agent.current_regime else "GREEN"
         )
-        watchlist = self.asset_svc.get_current_watchlist(macro_regime_str)
+        # Obtener activo del agente si está disponible
+        agent_symbol = None
+        if self.opportunity_agent:
+            agent_symbol = await self.opportunity_agent.get_best_asset()
+
+        # Construir watchlist de evaluación combinando Agente + Inteligencia
+        eval_watchlist = []
+        if agent_symbol:
+            eval_watchlist.append(agent_symbol)
+            logger.info(f"🎯 Activo del agente: {agent_symbol} — añadido a evaluación")
+
+        # Añadir watchlist base (sin duplicados)
+        for sym in self.asset_svc.get_current_watchlist(macro_regime_str):
+            if sym not in eval_watchlist:
+                eval_watchlist.append(sym)
+
+        if not eval_watchlist:
+            # Fallback safe dict
+            eval_watchlist = self._config.get("watchlist", ["EURUSD-OTC", "GBPUSD-OTC"])
+            logger.warning("⚠️ eval_watchlist vacía — usando watchlist fallback base")
+
+        logger.info(f"📋 Watchlist de evaluación: {eval_watchlist}")
+
+        tick_count = getattr(self, '_cycle_count', 0) + 1
+        self._cycle_count = tick_count
+        wl_str = str(eval_watchlist[:3])
+        if len(eval_watchlist) > 3:
+            wl_str = wl_str[:-1] + ", ...]"
+        logger.info(
+            f"⏱️  TICK START — ciclo={tick_count} | "
+            f"agente={agent_symbol or 'sin agente'} | "
+            f"watchlist={wl_str}"
+        )
 
         # Umbrales dinámicos idénticos al Step 7
         _ce_min_conf = float(os.getenv(
@@ -593,7 +632,7 @@ class NexusPipeline:
                 return None
 
         consensus_best = await self.consensus_engine.evaluate(
-            watchlist=watchlist,
+            watchlist=eval_watchlist,
             get_data_fn=_get_data_for_consensus,
             analyze_fn=self.strategy.analyze,
             min_conf=_ce_min_conf,
@@ -636,7 +675,7 @@ class NexusPipeline:
         # Forzar el activo configurado para que el resto use el correcto
         self._config["asset"] = active_symbol
 
-        asset, df = await self._get_market_data(active_symbol, watchlist)
+        asset, df = await self._get_market_data(active_symbol, eval_watchlist)
         if df is None or df.empty or len(df) < 30:
             logger.info("⏭️  TICK END — sin señal (motivo: datos insuficientes)")
             return  # Datos insuficientes
