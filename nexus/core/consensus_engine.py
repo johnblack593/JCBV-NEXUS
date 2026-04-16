@@ -140,6 +140,16 @@ class ConsensusEngine:
             if isinstance(r, AssetScore) and not r.is_expired
         ]
         
+        # Diagnostic Fix 3: Log identical ATRs (Possible state leak)
+        if len(results) >= 2:
+            import itertools
+            for a, b in itertools.combinations(results, 2):
+                if a.atr == b.atr and a.atr > 0.0011: # Ignorar fallbacks default
+                    logger.warning(
+                        f"🚨 ATR LEAK? {a.symbol} and {b.symbol} "
+                        f"share identical ATR: {a.atr}. Possible state contamination."
+                    )
+        
         # Guardar en log detallado con el min_conf principal
         for r in results:
             conf_ok = r.confidence >= min_conf

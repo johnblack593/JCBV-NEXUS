@@ -65,6 +65,10 @@ class QuestDBClient:
         self._ilp_buffer: List[str] = []
         self._BUFFER_FLUSH_SIZE = 100  # Flush every N lines
         self._lock = asyncio.Lock()
+        
+        # Connection state flags (Fix 4)
+        self._pg_warned = False
+        self._ilp_warned = False
 
     @property
     def is_connected(self) -> bool:
@@ -102,7 +106,11 @@ class QuestDBClient:
             )
             success = False
         except Exception as exc:
-            logger.error(f"Error conectando asyncpg a QuestDB: {exc}")
+            if not self._pg_warned:
+                logger.warning(f"⚠️ QuestDB no disponible — persistencia deshabilitada, usando journal CSV: {exc}")
+                self._pg_warned = True
+            else:
+                logger.debug(f"QuestDB PG retry failed: {exc}")
             success = False
 
         # 2. ILP socket — for high-throughput ingestion
@@ -115,7 +123,11 @@ class QuestDBClient:
                 f"🗄️ QuestDB ILP socket conectado ({self.ilp_host}:{self.ilp_port})"
             )
         except Exception as exc:
-            logger.warning(f"ILP socket no disponible: {exc}. Ticks se descartarán.")
+            if not self._ilp_warned:
+                logger.warning(f"⚠️ QuestDB ILP no disponible — Ticks se descartarán: {exc}")
+                self._ilp_warned = True
+            else:
+                logger.debug(f"QuestDB ILP retry failed: {exc}")
             self._ilp_connected = False
 
         return success

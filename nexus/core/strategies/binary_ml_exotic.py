@@ -55,16 +55,8 @@ class BinaryMLExoticStrategy(BaseStrategy):
     async def analyze(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
         Entrena un Random Forest on-the-fly y genera señal para la última vela.
-
-        Flow:
-            1. Genera features: Returns, ATR, RSI
-            2. Target: 1 si close[t+1] > close[t], else 0
-            3. Train en [0:TRAIN_SIZE], predict en [TRAIN_SIZE]
-            4. Retorna signal + la probabilidad como confidence
-
-        Returns:
-            {"signal": "BUY"|"SELL"|"HOLD", "confidence": float, "reason": str, ...}
         """
+        last_atr = 0.0  # Reset base for ATR (Fix 3)
         if df is None or len(df) < self.MIN_ROWS:
             return self._hold("Datos insuficientes para ML on-the-fly")
 

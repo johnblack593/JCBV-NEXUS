@@ -148,6 +148,14 @@ class NexusPipeline:
         self.metrics: Optional[NexusMetrics] = None
         self.telegram: Optional[TelegramReporter] = None
         self.journal: Optional[LocalJournal] = None
+        
+        # ── Validation / Debug Mode (Fix 2) ────────────────────────
+        self.validation_mode = os.getenv("NEXUS_VALIDATION_MODE", "false").lower() == "true"
+        if self.validation_mode:
+            logger.warning(
+                "⚠️  MODO VALIDACIÓN ACTIVO: Umbrales reducidos habilitados. "
+                "Para producción, set NEXUS_VALIDATION_MODE=false"
+            )
 
         # Session tracking
         self._running = False
@@ -614,14 +622,13 @@ class NexusPipeline:
             f"watchlist={wl_str}"
         )
 
-        # Umbrales dinámicos (REDUCCIÓN TEMPORAL PARA VALIDACIÓN END-TO-END)
-        # TODO: revertir a os.getenv cuando el primer trade pase con éxito.
-        _ce_min_conf = 0.50
-        min_payout_target = 75.0
-        logger.warning(
-            "⚠️ MODO VALIDACIÓN: umbrales reducidos "
-            "(conf=0.50, payout=75%) — REVERTIR ANTES DE PRODUCCIÓN"
-        )
+        # Umbrales basados en modo (Fix 2: VALIDATION vs PRODUCTION)
+        if self.validation_mode:
+            _ce_min_conf = 0.50
+            min_payout_target = 75.0
+        else:
+            _ce_min_conf = float(os.getenv("MIN_CONFIDENCE_THRESHOLD", "0.62"))
+            min_payout_target = float(os.getenv("MIN_PAYOUT_THRESHOLD", "80.0"))
 
         real_payouts = {}
         try:
@@ -780,12 +787,12 @@ class NexusPipeline:
         THRESHOLDS = {
             "GREEN":  float(os.getenv("MIN_CONFIDENCE_GREEN", "0.55")),
             "YELLOW": float(os.getenv("MIN_CONFIDENCE_YELLOW", "0.62")),
-            "RED":    999.0,  # nunca opera — ya bloqueado en Step 1
+            "RED":    float(os.getenv("MIN_CONFIDENCE_RED", "0.68")),
         }
         min_conf = THRESHOLDS.get(regime.value, 0.62)
         
-        # Sincronizar pipeline con el umbral de validación dinámico del Consensus
-        if _ce_min_conf < min_conf:
+        # Sincronizar pipeline con el umbral dinámico (Fix 2)
+        if self.validation_mode and _ce_min_conf < min_conf:
             min_conf = _ce_min_conf
         
         if raw_confidence < min_conf:
@@ -820,6 +827,17 @@ class NexusPipeline:
         logger.debug(f"✅ Step 4 completado en {elapsed_s4:.2f}s")
         
         logger.debug("▶️  Step 5: Execution")
+
+        # ── Fix 1: Pre-execution availability guard ───────────────
+        is_available = await self.asset_svc.is_available(asset)
+        if not is_available:
+            logger.warning(f"⏭️ {asset} suspendido — buscando alternativa")
+            active_symbol = await self.asset_svc.get_best_available(regime.value)
+            if not active_symbol:
+                logger.info("⏭️ TICK END — todos los activos suspendidos")
+                return
+            asset = active_symbol
+            self._config["asset"] = asset
 
         # ── Step 10: Build TradeSignal (with Active Trade Management) ─
         direction = self._map_signal_to_direction(signal_dir)
