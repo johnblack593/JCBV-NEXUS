@@ -139,7 +139,17 @@ class BinaryMLExoticStrategy(BaseStrategy):
                 reason = f"RF indeciso (prob={confidence:.3f}, class={pred_class})"
 
             # Extraer ATR real para el ConsensusEngine
-            last_atr = float(features_df["atr"].iloc[-1]) if "atr" in features_df else 0.001
+            if "atr" in features_df.columns:
+                raw_atr = float(features_df["atr"].iloc[-1])
+                # Si el ATR calculado es suspiciosamente pequeño (< 0.0001),
+                # usar la mediana de las últimas 5 velas como fallback
+                if raw_atr < 0.0001:
+                    atr_series = features_df["atr"].dropna().tail(5)
+                    last_atr = float(atr_series.median()) if not atr_series.empty else 0.001
+                else:
+                    last_atr = raw_atr
+            else:
+                last_atr = 0.001
 
             # El clf se destruye aquí al salir del scope (GC)
             return {

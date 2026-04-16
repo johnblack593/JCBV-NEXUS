@@ -673,7 +673,10 @@ class NexusPipeline:
 
         if consensus_best is None:
             # Ningún activo de la watchlist pasó filtros — tick limpio
-            logger.info("⏭️  TICK END — sin señal (motivo: sin activos evaluados en watchlist)")
+            logger.info(
+                f"⏭️  TICK END — sin señal "
+                f"(ConsensusEngine: no hay activo con señal ejecutable en este momento)"
+            )
             return
 
         # El ConsensusEngine eligió el mejor activo — usarlo en Steps 5+
@@ -752,8 +755,16 @@ class NexusPipeline:
             return
 
         if signal_dir == "HOLD":
-            logger.info("⏭️  TICK END — sin señal (motivo: signal HOLD)")
-            return
+            # Si el modelo devuelve HOLD pero logramos llegar aquí (gracias al Fallback del Consensus),
+            # extraemos la dirección de la predicción plana estricta del indicador rf_prediction.
+            rf_pred = signal_result.get("indicators", {}).get("rf_prediction", -1)
+            if rf_pred == 1:
+                signal_dir = "BUY"
+            elif rf_pred == 0:
+                signal_dir = "SELL"
+            else:
+                logger.info("⏭️  TICK END — sin señal (motivo: signal HOLD y sin raw prediction)")
+                return
 
         logger.debug("▶️  Step 3: Consensus / Confidence")
         t_s3 = time.perf_counter()

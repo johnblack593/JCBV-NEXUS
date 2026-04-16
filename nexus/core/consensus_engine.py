@@ -87,7 +87,10 @@ class ConsensusEngine:
                 # Activo Forex / cripto de precio bajo: escala original
                 norm_atr = min(atr / 0.001, 1.0)
                 
-            composite = (confidence * 0.60) + (norm_payout * 0.25) + (norm_atr * 0.15) if signal != "HOLD" else 0.0
+            # HOLD recibe composite reducido (no cero) para mantener ranking
+            composite = (confidence * 0.60) + (norm_payout * 0.25) + (norm_atr * 0.15)
+            if signal == "HOLD":
+                composite *= 0.5  # penalización del 50%, pero no eliminación
 
             score = AssetScore(
                 symbol=symbol,
@@ -171,15 +174,20 @@ class ConsensusEngine:
         thresholds = [min_conf, 0.55, 0.50]
         
         for attempt, thresh in enumerate(thresholds):
+            # En intentos de fallback (attempt > 0), incluir señales HOLD
+            # para no desperdiciar setups válidos por señal neutral
+            exclude_hold = (attempt == 0)  # Solo primer intento filtra HOLD
             valid = [
                 r for r in results
-                if r.signal != "HOLD" and r.confidence >= thresh 
-                and r.atr >= atr_floor and r.payout >= min_payout
+                if (r.signal != "HOLD" or not exclude_hold)
+                and r.confidence >= thresh
+                and r.atr >= atr_floor
+                and r.payout >= min_payout
             ]
             
             if valid:
-                if thresh == 0.50:
-                    # El nivel 50% es solo diagnóstico, NUNCA opera.
+                if thresh == 0.50 and min_conf > 0.50:
+                    # Solo es diagnóstico si min_conf original era mayor
                     best = max(valid, key=lambda s: s.confidence)
                     logger.info(
                         f"📊 MERCADO SIN SETUP: mejor conf disponible fue {best.confidence:.3f} "
