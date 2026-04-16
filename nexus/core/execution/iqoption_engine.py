@@ -107,42 +107,53 @@ class IQOptionExecutionEngine(AbstractExecutionEngine):
                 self._api = IQ_Option(self._email, self._password)
 
                 try:
-                    # Timeout duro (30s) para evitar hang en el INIT masivo del catálogo
-                    future_connect = asyncio.to_thread(self._api.connect)
-                    check, reason = await asyncio.wait_for(future_connect, timeout=30.0)
-                except asyncio.TimeoutError:
-                    logger.warning("⚠️ IQ Option init timeout (30s) — continuando con fallback sin catálogo completo")
-                    # No abortamos. Permitimos modo degradado (api connected, catalog incomplet).
-                    check = True
-                    reason = "Timeout_Fallback"
-                    self._connected = True
-                except Exception as conn_exc:
-                    logger.warning(
-                        f"⚠️ Excepción en API.connect() intento {attempt}: {conn_exc}"
+                    # 1. Login HTTP — timeout 15s
+                    connected = await asyncio.wait_for(
+                        asyncio.to_thread(self._api.connect),
+                        timeout=15.0
                     )
-                    check = False
-                    reason = str(conn_exc)
+                    
+                    if isinstance(connected, tuple):
+                        check, reason = connected
+                    else:
+                        check = connected
+                        reason = "Unknown"
 
-                if check:
+                    if not check:
+                        if reason == '2FA':
+                            logger.critical("2FA ACTIVADO — Enviar código SMS requerido. Abortando reconexión.")
+                            return False
+                        logger.warning(f"⚠️ Conexión fallida ({reason}). Reintentando en {delay}s...")
+                        await asyncio.sleep(delay)
+                        delay = min(delay * 2, max_delay)
+                        attempt += 1
+                        if attempt > 10:
+                            logger.error(f"❌ Fallo IQ Option definitivo tras {attempt - 1} intentos: {reason}")
+                            return False
+                        continue
+                        
+                    logger.info("✅ Login OK")
                     self._connected = True
-                    balance_mode = "PRACTICE" if self._account_type == "PRACTICE" else "REAL"
-                    await asyncio.to_thread(self._api.change_balance, balance_mode)
-                    logger.info(f"✅ IQ Option conectado [{balance_mode}] — JCBV API v{IQ_Option.__version__}")
+
+                    # 2. Cambiar a cuenta correcta (REAL o PRACTICE)
+                    account_type = os.getenv("IQ_OPTION_ACCOUNT_TYPE", "PRACTICE").upper()
+                    await asyncio.to_thread(
+                        self._api.change_balance, account_type
+                    )
+                    logger.info(f"✅ Cuenta activa: {account_type}")
+
+                    # 3. NO esperar apioptioninitall — el catálogo se carga en background
+                    # El AssetIntelligenceService maneja la disponibilidad de activos.
+                    logger.info("ℹ️  Catálogo de activos: gestionado por AssetIntelligenceService")
+
                     return True
-                else:
-                    if reason == '2FA':
-                        logger.critical("2FA ACTIVADO — Enviar código SMS requerido. Abortando reconexión.")
-                        return False
 
-                    logger.warning(f"⚠️ Conexión fallida ({reason}). Reintentando en {delay}s...")
-                    await asyncio.sleep(delay)
-
-                    delay = min(delay * 2, max_delay)
-                    attempt += 1
-
-                    if attempt > 10:
-                        logger.error(f"❌ Fallo IQ Option definitivo tras {attempt - 1} intentos: {reason}")
-                        return False
+                except asyncio.TimeoutError:
+                    logger.error("IQ Option: timeout de conexión (15s)")
+                    return False
+                except Exception as e:
+                    logger.error(f"IQ Option: error de conexión: {e}")
+                    return False
 
     async def disconnect(self) -> None:
         """Cierra la conexión WebSocket limpiamente (JCBV API tiene close())."""

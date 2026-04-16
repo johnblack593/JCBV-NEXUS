@@ -210,6 +210,23 @@ class NexusPipeline:
             self.risk_manager.update_portfolio(balance, [])
             logger.info(f"✅ Balance inicial: ${balance:.2f}")
 
+            # Inicializar Asset Intelligence Service
+            from nexus.services.asset_intelligence import AssetIntelligenceService
+
+            self.asset_svc = AssetIntelligenceService(
+                redis_client=self.redis_client,
+                iqoption_api=self.execution_engine._api if hasattr(self.execution_engine, '_api') else None
+            )
+
+            # Obtener watchlist inicial basada en horario actual
+            macro_regime_str = self.macro_agent.current_regime.value if hasattr(self, 'macro_agent') and self.macro_agent and self.macro_agent.current_regime else "GREEN"
+            watchlist = self.asset_svc.get_current_watchlist(macro_regime=macro_regime_str)
+            logger.info(f"📋 Watchlist activa: {watchlist}")
+
+            # Iniciar refresh background (no bloquea)
+            asyncio.create_task(self.asset_svc.refresh_cache_background())
+            logger.info("✅ AssetIntelligenceService activo")
+
             self.opportunity_agent = OpportunityAgent(
                 execution_engine=self.execution_engine,
                 redis_client=self.redis_client,
@@ -516,7 +533,33 @@ class NexusPipeline:
                 logger.warning("🛡️ Exposición máxima alcanzada — tick omitido.")
                 return
 
-        # ── Step 5: Get Market Data ──────────────────────────────────
+        # ── Step 5: Validar Disponibilidad y Get Market Data ─────────
+        from nexus.services.asset_intelligence import AssetStatus
+        base_asset = self._config.get("asset", "EURUSD-OTC")
+        
+        # Verificar disponibilidad del activo antes de operar
+        asset_info = await self.asset_svc.get_asset_info(base_asset)
+
+        if asset_info.status == AssetStatus.UNAVAILABLE:
+            logger.info(f"⏸️  {base_asset} no disponible ahora — saltando tick")
+            return  # No operar, esperar próximo tick
+
+        if asset_info.status == AssetStatus.UNKNOWN:
+            # Intentar con el mejor activo disponible de la watchlist
+            macro_regime_str = self.macro_agent.current_regime.value if hasattr(self, 'macro_agent') and self.macro_agent and self.macro_agent.current_regime else "GREEN"
+            watchlist = self.asset_svc.get_current_watchlist(macro_regime_str)
+            best = await self.asset_svc.get_best_available(watchlist)
+            if best is None:
+                logger.warning("⚠️  Ningún activo disponible — saltando tick")
+                return
+            active_symbol = best.symbol
+            logger.info(f"🔄 Usando activo alternativo: {active_symbol} ({best.profit:.0%} profit)")
+        else:
+            active_symbol = base_asset
+            
+        # Forzar el activo configurado para que _get_market_data() use el correcto
+        self._config["asset"] = active_symbol
+
         asset, df = await self._get_market_data()
         if df is None or df.empty or len(df) < 30:
             return  # Datos insuficientes

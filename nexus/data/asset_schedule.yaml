@@ -1,0 +1,181 @@
+# nexus/data/asset_schedule.yaml
+# Horarios en UTC. Fuente: documentación IQ Option + verificación manual.
+# Actualizar cuando el broker cambie horarios.
+# active_id: ID interno de IQ Option para subscribe directo
+
+version: "1.0"
+updated: "2026-04-15"
+
+assets:
+
+  # ── FOREX SPOT (mercado tradicional) ──────────────────────────────
+  EURUSD:
+    active_id: 1
+    type: forex
+    profit_typical: 0.75
+    min_bet: 1
+    expirations: [1, 5, 15]
+    schedule:
+      # Forex abre dom 22:00 UTC, cierra vie 22:00 UTC
+      # Sesiones de mayor liquidez:
+      - days: [MON, TUE, WED, THU, FRI]
+        open: "00:00"
+        close: "22:00"
+      - days: [SUN]
+        open: "22:00"
+        close: "23:59"
+    peak_hours_utc: ["07:00-09:00", "12:00-14:00", "17:00-20:00"]
+    notes: "Mayor volumen en overlap Londres-NY (12:00-17:00 UTC)"
+
+  GBPUSD:
+    active_id: 2
+    type: forex
+    profit_typical: 0.76
+    min_bet: 1
+    expirations: [1, 5, 15]
+    schedule:
+      - days: [MON, TUE, WED, THU, FRI]
+        open: "00:00"
+        close: "22:00"
+      - days: [SUN]
+        open: "22:00"
+        close: "23:59"
+    peak_hours_utc: ["07:00-12:00", "13:00-17:00"]
+
+  USDJPY:
+    active_id: 4
+    type: forex
+    profit_typical: 0.74
+    min_bet: 1
+    expirations: [1, 5, 15]
+    schedule:
+      - days: [MON, TUE, WED, THU, FRI]
+        open: "00:00"
+        close: "22:00"
+      - days: [SUN]
+        open: "22:00"
+        close: "23:59"
+    peak_hours_utc: ["00:00-03:00", "07:00-09:00"]
+
+  AUDUSD:
+    active_id: 3
+    type: forex
+    profit_typical: 0.73
+    min_bet: 1
+    expirations: [1, 5, 15]
+    schedule:
+      - days: [MON, TUE, WED, THU, FRI]
+        open: "00:00"
+        close: "22:00"
+      - days: [SUN]
+        open: "22:00"
+        close: "23:59"
+    peak_hours_utc: ["22:00-02:00"]
+
+  # ── OTC (Over The Counter — 24/7 con ventanas de mantenimiento) ───
+  EURUSD-OTC:
+    active_id: 76
+    type: otc
+    profit_typical: 0.82
+    min_bet: 1
+    expirations: [1, 5, 15]
+    blitz_eligible: true
+    blitz_min_expiration: 60
+    schedule:
+      # OTC disponible 24/7 excepto ventanas de mantenimiento
+      - days: [MON, TUE, WED, THU, FRI, SAT]
+        open: "00:00"
+        close: "23:59"
+      - days: [SUN]
+        open: "00:00"
+        close: "20:59"
+        # Mantenimiento típico DOM 21:00-23:00 UTC
+    maintenance_windows:
+      - days: [SUN]
+        start: "21:00"
+        end: "23:00"
+        note: "Ventana típica — puede variar ±1h"
+    notes: "Disponible cuando EURUSD spot está cerrado (fines de semana)"
+
+  GBPUSD-OTC:
+    active_id: 77
+    type: otc
+    profit_typical: 0.82
+    min_bet: 1
+    expirations: [1, 5, 15]
+    blitz_eligible: true
+    blitz_min_expiration: 60
+    schedule:
+      - days: [MON, TUE, WED, THU, FRI, SAT]
+        open: "00:00"
+        close: "23:59"
+      - days: [SUN]
+        open: "00:00"
+        close: "20:59"
+    maintenance_windows:
+      - days: [SUN]
+        start: "21:00"
+        end: "23:00"
+
+  EURCAD-OTC:
+    active_id: 79
+    type: otc
+    profit_typical: 0.80
+    min_bet: 1
+    expirations: [1, 5, 15]
+    schedule:
+      - days: [MON, TUE, WED, THU, FRI, SAT]
+        open: "00:00"
+        close: "23:59"
+      - days: [SUN]
+        open: "00:00"
+        close: "20:59"
+
+  EURGBP-OTC:
+    active_id: 99
+    type: otc
+    profit_typical: 0.80
+    min_bet: 1
+    expirations: [1, 5, 15]
+    schedule:
+      - days: [MON, TUE, WED, THU, FRI, SAT]
+        open: "00:00"
+        close: "23:59"
+      - days: [SUN]
+        open: "00:00"
+        close: "20:59"
+
+  # ── CRYPTO OTC (24/7 sin mantenimiento semanal) ───────────────────
+  BTCUSD-OTC:
+    active_id: 1941
+    type: crypto_otc
+    profit_typical: 0.80
+    min_bet: 1
+    expirations: [1, 5, 15]
+    schedule:
+      - days: [MON, TUE, WED, THU, FRI, SAT, SUN]
+        open: "00:00"
+        close: "23:59"
+    notes: "Crypto OTC disponible 24/7 sin mantenimiento conocido"
+
+  ETHUSD-OTC:
+    active_id: 1942
+    type: crypto_otc
+    profit_typical: 0.80
+    min_bet: 1
+    expirations: [1, 5, 15]
+    schedule:
+      - days: [MON, TUE, WED, THU, FRI, SAT, SUN]
+        open: "00:00"
+        close: "23:59"
+
+  # ── BLITZ (expiración 30s-2min, alta frecuencia) ──────────────────
+  # El campo blitz:true indica que este activo es apto para Blitz.
+
+
+
+# ── REGLAS GLOBALES ───────────────────────────────────────────────────
+global_rules:
+  weekend_assets: [EURUSD-OTC, GBPUSD-OTC, EURCAD-OTC, BTCUSD-OTC, ETHUSD-OTC]
+  weekday_preference: [EURUSD, GBPUSD, USDJPY, EURUSD-OTC, GBPUSD-OTC]
+  blocked_on_red: [BTCUSD-OTC, ETHUSD-OTC]
