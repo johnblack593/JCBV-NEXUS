@@ -156,6 +156,9 @@ class NexusPipeline:
         self._last_trade_time: float = 0.0
         self._trade_results: List[TradeResult] = []
         self._returns_history: List[float] = []
+        self._last_trade_result: str = "NONE"
+        from nexus.core.consensus_engine import ConsensusEngine
+        self.consensus_engine = ConsensusEngine()
 
     async def initialize(self) -> None:
         """Inicializa todas las capas en orden de dependencia."""
@@ -497,11 +500,22 @@ class NexusPipeline:
             )
             return
 
-        # ── Step 3: Cooldown between trades ──────────────────────────
-        cooldown = self._config.get("cooldown_between_trades_s", 300)
+        # ── Step 3: Cooldown Adaptativo por Resultado ─────────────────
+        cooldown_base = self._config.get("cooldown_between_trades_s", 300)
+        _last_result = getattr(self, "_last_trade_result", "NONE")
+        if _last_result == "WIN":
+            cooldown = max(90, cooldown_base // 3)    # 90s mínimo tras WIN
+        elif _last_result == "LOSS":
+            cooldown = min(600, cooldown_base * 2)    # max 600s tras LOSS
+        else:
+            cooldown = cooldown_base                  # default 300s al inicio
+
         elapsed = time.time() - self._last_trade_time
         if elapsed < cooldown and self._last_trade_time > 0:
-            return  # Silent return — still in cooldown
+            remaining = int(cooldown - elapsed)
+            if remaining % 60 == 0:  # Log cada 60s, no cada tick
+                logger.debug(f"⏳ Cooldown {_last_result}: {remaining}s restantes")
+            return
 
         # Actualizar portfolio antes de consultar circuit breaker
         if self.risk_manager and self.execution_engine:
@@ -532,6 +546,45 @@ class NexusPipeline:
             if allowed == 0.0:
                 logger.warning("🛡️ Exposición máxima alcanzada — tick omitido.")
                 return
+
+        # ── Step 4c: Consensus Engine — Selección paralela de activos ──
+        macro_regime_str = (
+            self.macro_agent.current_regime.value
+            if hasattr(self, 'macro_agent') and self.macro_agent
+            and self.macro_agent.current_regime else "GREEN"
+        )
+        watchlist = self.asset_svc.get_current_watchlist(macro_regime_str)
+
+        # Umbrales dinámicos idénticos al Step 7
+        _ce_min_conf = float(os.getenv(
+            "MIN_CONFIDENCE_YELLOW" if macro_regime_str == "YELLOW"
+            else "MIN_CONFIDENCE_GREEN", "0.62" if macro_regime_str == "YELLOW" else "0.55"
+        ))
+
+        async def _get_data_for_consensus(symbol: str):
+            """Wrapper para obtener datos de mercado por símbolo."""
+            try:
+                self._config["asset"] = symbol
+                _, df = await self._get_market_data()
+                return df
+            except Exception:
+                return None
+
+        consensus_best = await self.consensus_engine.evaluate(
+            watchlist=watchlist,
+            get_data_fn=_get_data_for_consensus,
+            analyze_fn=self.strategy.analyze,
+            min_conf=_ce_min_conf,
+            min_payout=float(self._config.get("min_payout", 80)),
+            atr_floor=float(os.getenv("ATR_FLOOR", "0.00005")),
+        )
+
+        if consensus_best is None:
+            # Ningún activo de la watchlist pasó filtros — tick limpio
+            return
+
+        # El ConsensusEngine eligió el mejor activo — usarlo en Steps 5+
+        self._config["asset"] = consensus_best.symbol
 
         # ── Step 5: Validar Disponibilidad y Get Market Data ─────────
         from nexus.services.asset_intelligence import AssetStatus
@@ -589,36 +642,32 @@ class NexusPipeline:
         if signal_dir == "HOLD":
             return
 
-        # ── Step 7: Regime-Aware Adjustments (BUG FIX) ───────────────
+        # ── Step 7: Umbral Dinámico por Régimen (Institutional Standard) ─
         raw_confidence = confidence
-        min_conf = self._config.get("min_confidence", 0.55)
-        regime_factor = 1.0
         
-        # Ajustar umbrales según régimen
-        MIN_CONFIDENCE_YELLOW = 0.65
-        MIN_CONFIDENCE_RED = 0.75
+        # Umbrales directos — NO se multiplica la confianza
+        THRESHOLDS = {
+            "GREEN":  float(os.getenv("MIN_CONFIDENCE_GREEN", "0.55")),
+            "YELLOW": float(os.getenv("MIN_CONFIDENCE_YELLOW", "0.62")),
+            "RED":    999.0,  # nunca opera — ya bloqueado en Step 1
+        }
+        min_conf = THRESHOLDS.get(regime.value, 0.62)
         
-        if regime == MacroRegime.YELLOW:
-            regime_factor = 0.8  # Reduce confidence 20%
-            min_conf = MIN_CONFIDENCE_YELLOW
-            logger.info("🟡 RÉGIMEN AMARILLO — aplicando reducción de confianza 20%")
-        elif regime == MacroRegime.RED:
-            regime_factor = 0.5
-            min_conf = MIN_CONFIDENCE_RED
-        elif regime == MacroRegime.GREEN:
-            min_conf = self._config.get("min_confidence", 0.55)
-            
-        effective_confidence = raw_confidence * regime_factor
-
-        # ── Step 8: Confidence Gate ──────────────────────────────────
-        if effective_confidence < min_conf:
+        if raw_confidence < min_conf:
             logger.info(
-                f"⛔ SEÑAL RECHAZADA | {asset} | conf. base: {raw_confidence:.1%} | régimen: {regime.name} "
-                f"→ conf. efectiva: {effective_confidence:.1%} < umbral: {min_conf:.1%} | Razón: confianza insuficiente"
+                f"⛔ SEÑAL RECHAZADA | {asset} | "
+                f"conf: {raw_confidence:.1%} < umbral {regime.value}: {min_conf:.1%}"
             )
             return
-            
-        confidence = effective_confidence
+        
+        # La confianza pasa directa, sin penalización
+        confidence = raw_confidence
+        
+        # Log solo cuando opera en YELLOW (señal de calidad real)
+        if regime == MacroRegime.YELLOW:
+            logger.info(
+                f"🟡 YELLOW OK | {asset} | conf: {confidence:.1%} ≥ {min_conf:.1%}"
+            )
 
         # ── Step 9: Position Sizing (Layer 4) ────────────────────────
         size = await self._calculate_size(confidence, df)
@@ -815,6 +864,7 @@ class NexusPipeline:
                 )
 
                 # Persist to local journal
+                self._last_trade_result = "WIN" if _pnl > 0 else "LOSS"
                 if self.journal:
                     self.journal.log_trade({
                         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -1077,17 +1127,18 @@ class NexusPipeline:
 
     async def _daily_reset_loop(self) -> None:
         """Resetea contadores diarios cada 24 horas (alineado a UTC medianoche)."""
-        import math
-        from datetime import date, timedelta
+        from datetime import timedelta
         while self._running:
             now = datetime.now(timezone.utc)
-            # Próxima medianoche UTC
-            next_midnight = datetime.combine(
-                date.today() + timedelta(days=1),
-                datetime.min.time(),
-                tzinfo=timezone.utc,
-            )
+            # Próxima medianoche UTC (asegurando fecha base en UTC)
+            next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            
             seconds_until_midnight = (next_midnight - now).total_seconds()
+            
+            # Guarda de seguridad para evitar sleep negativo/inmediato (evita loop infinito)
+            if seconds_until_midnight <= 0:
+                seconds_until_midnight = 86400.0
+                
             await asyncio.sleep(seconds_until_midnight)
             self.reset_daily_counters()
             logger.info("📅 Contadores diarios reseteados a medianoche UTC.")
