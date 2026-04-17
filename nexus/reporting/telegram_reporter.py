@@ -579,7 +579,7 @@ class TelegramReporter:
             jnl_pnl = ir.get("journal_session_pnl", 0.0)
             if journal_st.startswith("OK"):
                 if jnl_trades > 0:
-                    msg += f"  ✅ Journal local: {jnl_trades} trades previos | P&L sesión ${jnl_pnl:.2f}\n"
+                    msg += f"  ✅ Journal local: {jnl_trades} trades previos | P&L histórico ${jnl_pnl:.2f}\n"
                 else:
                     msg += f"  ✅ Journal local: sin trades previos\n"
             elif journal_st:

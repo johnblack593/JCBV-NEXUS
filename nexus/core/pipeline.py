@@ -277,8 +277,9 @@ class NexusPipeline:
         self.telegram = TelegramReporter.get_instance()
         await self.telegram.initialize()
 
-        # Restaurar estado de sesión en TelegramReporter
+        # Restaurar estado de sesión (Weekly permanece, daily se resetea para nueva sesión)
         if prev_state.get("trades_today", 0) > 0:
+            # El P&L previo se carga para el reporte de arranque, se limpiará tras fire_startup
             self.telegram._session_pnl = prev_state.get("session_pnl", 0.0)
             weekly_trades = self.journal.get_weekly_trades()
             weekly_equity = self.journal.get_weekly_equity()
@@ -286,7 +287,9 @@ class NexusPipeline:
                 self.telegram._weekly_trades = weekly_trades
             if weekly_equity:
                 self.telegram._weekly_equity = weekly_equity
-            self._daily_trades = prev_state.get("trades_today", 0)
+
+        # FIX 1: Los trades de sesiones previas son historial, no límite activo de sesión.
+        self._daily_trades = 0
 
         if connected:
             from nexus.core.llm.model_discovery import ModelDiscoveryService
@@ -334,6 +337,8 @@ class NexusPipeline:
                 dry_run=self.dry_run_mode,
                 infrastructure_report=infra_report,
             )
+            # FIX 2: Reset P&L de sesión actual tras mostrar historial en arranque
+            self.telegram._session_pnl = 0.0
 
     # ══════════════════════════════════════════════════════════════════
     #  Main Event Loop
