@@ -616,6 +616,12 @@ class TelegramReporter:
                     elif source == "api_first_available":
                         source_icon = " ⚠️ "
                         source_label = "(primer disponible)"
+                    elif source == "api_ping":
+                        source_icon = " ✅ "
+                        source_label = "(vía ping)"
+                    elif source == "free_tier_standby":
+                        source_icon = " ⚠️ "
+                        source_label = "(standby free tier)"
                     else:
                         source_icon = ""
                         source_label = ""
@@ -626,6 +632,9 @@ class TelegramReporter:
                         any_ok = True
                         lat_str = f" — {latency:.0f}ms" if latency else ""
                         msg += f"  ✅ {provider}: conectado{lat_str}{model_str}\n"
+                    elif error_category == "HTTP_429":
+                        # Gemini-specific standby reporting
+                        msg += f"  ⚠️ {provider}: standby (free tier — activa en ~60s)\n"
                     else:
                         diag = self._classify_llm_error(error_type)
                         cat_tag = f" [{error_category}]" if error_category else ""

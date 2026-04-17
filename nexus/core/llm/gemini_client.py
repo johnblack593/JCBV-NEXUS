@@ -9,7 +9,9 @@ Uses aiohttp for all HTTP transport. No SDK dependency.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from typing import Optional
 
 import aiohttp
@@ -23,6 +25,52 @@ _BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 class GeminiClientError(Exception):
     """Raised on non-recoverable Gemini API failures."""
     pass
+
+
+class GeminiRateLimitError(GeminiClientError):
+    """Raised when a specific API key is in cooling down."""
+    pass
+
+
+class GeminiRateLimiter:
+    """
+    Proactive rate limiting for Gemini free tier (2 RPM).
+    Shared across all instances via class variables.
+    """
+    MIN_INTERVAL_S = 31  # 2 rpm -> 1 every 31s for safety
+    _last_call: dict[str, float] = {}  # key_hash -> timestamp
+    _cooling: dict[str, float] = {}    # key_hash -> timestamp until reactive
+
+    @classmethod
+    async def wait_if_needed(cls, api_key: str) -> None:
+        key_hash = api_key[:8]
+        now = time.time()
+        
+        # Check if cooling down
+        if key_hash in cls._cooling:
+            until = cls._cooling[key_hash]
+            if now < until:
+                wait_time = until - now
+                logger.warning(f"Gemini key [{key_hash}] cooling down. Available in {wait_time:.1f}s")
+                await asyncio.sleep(wait_time)
+            else:
+                del cls._cooling[key_hash]
+
+        # Check interval
+        if key_hash in cls._last_call:
+            elapsed = now - cls._last_call[key_hash]
+            if elapsed < cls.MIN_INTERVAL_S:
+                wait_time = cls.MIN_INTERVAL_S - elapsed
+                logger.debug(f"Gemini proactive rate limit: waiting {wait_time:.1f}s")
+                await asyncio.sleep(wait_time)
+
+    @classmethod
+    def mark_call(cls, api_key: str) -> None:
+        cls._last_call[api_key[:8]] = time.time()
+
+    @classmethod
+    def set_cooling(cls, api_key: str, seconds: int) -> None:
+        cls._cooling[api_key[:8]] = time.time() + seconds
 
 
 class GeminiClient:
@@ -93,13 +141,24 @@ class GeminiClient:
 
         logger.debug("Gemini request: model=%s, max_tokens=%d", self._model, max_tokens)
 
+        # Proactive rate limit
+        await GeminiRateLimiter.wait_if_needed(self._api_key)
+
         try:
             async with session.post(url, json=payload) as resp:
+                GeminiRateLimiter.mark_call(self._api_key)
+
                 if resp.status == 200:
                     data = await resp.json()
                     text = data["candidates"][0]["content"]["parts"][0]["text"]
                     logger.debug("Gemini response received (%d chars)", len(text))
                     return text
+                elif resp.status == 429:
+                    body = await resp.text()
+                    logger.warning("Gemini rate limit (429) hit for key [%s]", self._api_key[:8])
+                    # Signal cooling down for this key
+                    GeminiRateLimiter.set_cooling(self._api_key, 60)
+                    raise GeminiRateLimitError(f"Gemini 429: {body[:100]}")
                 else:
                     body = await resp.text()
                     logger.warning(

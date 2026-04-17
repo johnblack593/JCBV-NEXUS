@@ -22,10 +22,9 @@ class ModelDiscoveryService:
     ]
 
     GEMINI_PREFERRED = [
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
+        "gemini-1.5-flash",          # Más estable para free tier
+        "gemini-1.5-flash-8b",       # Muy ligero, ideal para cuota baja
+        "gemini-2.0-flash-lite",     # Si está disponible
     ]
 
     def _select_best_groq(self, available: List[str]) -> str:
@@ -92,30 +91,43 @@ class ModelDiscoveryService:
         return filtered
 
     async def discover_gemini_models(self, api_key: str, timeout: float = 6.0) -> dict:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        """
+        Versión optimizada para Free Tier: No enumera modelos (ahorra cuota).
+        Realiza un 'ping' de validación con el modelo preferido.
+        """
+        # Usar el primer modelo de la lista como candidato principal
+        candidate = self.GEMINI_PREFERRED[0]
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{candidate}:generateContent?key={api_key}"
+        
+        payload = {
+            "contents": [{"parts": [{"text": "ping"}]}],
+            "generationConfig": {"maxOutputTokens": 1}
+        }
+
         try:
             connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver(), ttl_dns_cache=300)
             async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+                async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
                     if resp.status == 200:
-                        data = await resp.json()
-                        raw_models = data.get("models", [])
-                        models = self._filter_gemini_models(raw_models)
-                        
-                        selected = self._select_best_gemini(models)
-                        source = "api" if selected in self.GEMINI_PREFERRED else "api_first_available"
-                        if source == "api_first_available":
-                            logger.info(f"Gemini API: Ningún modelo preferido. Usando primero disponible: {selected}")
+                        logger.info(f"Gemini discovery: Modelo {candidate} validado vía ping.")
                         return {
-                            "available": models,
-                            "selected": selected,
-                            "source": source,
+                            "available": self.GEMINI_PREFERRED,
+                            "selected": candidate,
+                            "source": "api_ping",
                             "error": None
+                        }
+                    elif resp.status == 429:
+                        logger.warning("Gemini discovery: Rate limit (429) al validar. Marcando como standby.")
+                        return {
+                            "available": self.GEMINI_PREFERRED,
+                            "selected": candidate,
+                            "source": "free_tier_standby",
+                            "error": "Rate limit (standby)"
                         }
                     else:
                         text = await resp.text()
                         logger.warning(f"Gemini discovery failed (HTTP {resp.status}): {text[:200]}")
-                        return self._make_fallback_result("gemini")
+                        return self._make_fallback_result("gemini", Exception(f"HTTP {resp.status}"))
         except Exception as e:
             logger.warning(f"Gemini discovery exception: {e}")
             return self._make_fallback_result("gemini", e)

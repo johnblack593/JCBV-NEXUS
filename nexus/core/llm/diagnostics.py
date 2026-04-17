@@ -43,6 +43,12 @@ try:
 except ImportError:
     _HAS_GOOGLE_API_CORE = False
 
+# Import Gemini specific errors for classification
+try:
+    from .gemini_client import GeminiRateLimitError
+except ImportError:
+    GeminiRateLimitError = type("GeminiRateLimitError", (Exception,), {})
+
 logger = logging.getLogger("nexus.llm.diagnostics")
 
 
@@ -198,7 +204,9 @@ def classify_provider_error(
         elif isinstance(exc, ServiceUnavailable): category = CATEGORY_HTTP_5XX
         elif isinstance(exc, (NotFound, InvalidArgument)): category = CATEGORY_BAD_REQUEST
 
-    if category == CATEGORY_UNKNOWN:
+    elif isinstance(exc, GeminiRateLimitError):
+        category = CATEGORY_HTTP_429
+    elif category == CATEGORY_UNKNOWN:
         # Try to extract HTTP status from error message
         if "401" in raw or "unauthorized" in lower or "invalid api key" in lower:
             category = CATEGORY_HTTP_401
